@@ -6,7 +6,6 @@ import subprocess
 import sys
 import tempfile
 import urllib.request
-import winreg
 import zipfile
 
 import tools
@@ -16,14 +15,6 @@ GECKO_ID = "ytmp4@local"
 HOST_NAME = "com.ytmp4.host"
 FFMPEG_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 DENO_URL = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip"
-CHROMIUM = [
-    r"Software\Google\Chrome",
-    r"Software\Microsoft\Edge",
-    r"Software\BraveSoftware\Brave-Browser",
-    r"Software\Chromium",
-    r"Software\Vivaldi",
-]
-FIREFOX = r"Software\Mozilla"
 QUIET = "--update" in sys.argv
 
 
@@ -77,7 +68,7 @@ def extract(zip_path, wanted, target):
 
 
 def ensure_ytdlp():
-    step(1, "Instalando yt-dlp")
+    step(2, "Instalando yt-dlp")
     cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "--quiet", "yt-dlp[default]"]
     if subprocess.run(cmd).returncode != 0:
         subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], capture_output=True)
@@ -87,7 +78,7 @@ def ensure_ytdlp():
 
 
 def ensure_ffmpeg():
-    step(2, "Buscando ffmpeg")
+    step(3, "Buscando ffmpeg")
     if tools.ffmpeg_dir():
         say("       Ya estaba instalado.")
         return
@@ -99,7 +90,7 @@ def ensure_ffmpeg():
 
 
 def ensure_js():
-    step(3, "Buscando Deno o Node")
+    step(4, "Buscando Deno o Node")
     if tools.js_runtimes():
         say("       Ya estaba instalado.")
         return
@@ -115,8 +106,7 @@ def write_json(path, data):
         json.dump(data, f, indent=2)
 
 
-def register():
-    step(4, "Conectando con los navegadores")
+def write_files():
     bat = os.path.join(tools.HOST, "host.bat")
     with open(bat, "w", encoding="oem", newline="\r\n") as f:
         f.write("@echo off\n")
@@ -126,10 +116,6 @@ def register():
     firefox = os.path.join(tools.HOST, f"{HOST_NAME}.firefox.json")
     write_json(chromium, {**base, "allowed_origins": [f"chrome-extension://{EXTENSION_ID}/"]})
     write_json(firefox, {**base, "allowed_extensions": [GECKO_ID]})
-    for key, manifest in [*((k, chromium) for k in CHROMIUM), (FIREFOX, firefox)]:
-        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, rf"{key}\NativeMessagingHosts\{HOST_NAME}") as k:
-            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, manifest)
-    say("       Chrome, Edge, Brave, Opera, Vivaldi y Firefox.")
 
 
 def selftest():
@@ -158,12 +144,14 @@ def selftest():
 def main():
     if sys.version_info < (3, 10):
         fail("Se necesita Python 3.10 o mas nuevo. Instalalo desde https://www.python.org/downloads/")
-    say()
+    if "--files" in sys.argv:
+        write_files()
+        return
     ensure_ytdlp()
     ensure_ffmpeg()
     ensure_js()
-    register()
     if QUIET:
+        write_files()
         return
     selftest()
     say()

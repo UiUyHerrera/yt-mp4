@@ -3,6 +3,9 @@ setlocal EnableExtensions
 title YT MP4 - Instalador
 cd /d "%~dp0"
 set "PYURL=https://www.python.org/ftp/python/3.13.12/python-3.13.12-amd64.exe"
+set "HOSTDIR=%~dp0host"
+set "MAN=%~dp0host\com.ytmp4.host.json"
+set "MANFF=%~dp0host\com.ytmp4.host.firefox.json"
 echo.
 echo  YT MP4 - Instalador
 echo.
@@ -20,11 +23,38 @@ call :findpy
 if not defined PY goto nopy
 :havepy
 echo  Python: %PY%
-"%PY%" "%~dp0host\setup.py"
+echo.
+echo  [1/5] Conectando con los navegadores
+"%PY%" "%HOSTDIR%\setup.py" --files
+if errorlevel 1 goto failed
+if not exist "%MAN%" goto failed
+for %%K in ("Google\Chrome" "Microsoft\Edge" "BraveSoftware\Brave-Browser" "Chromium" "Vivaldi") do reg add "HKCU\Software\%%~K\NativeMessagingHosts\com.ytmp4.host" /ve /t REG_SZ /d "%MAN%" /f >nul
+reg add "HKCU\Software\Mozilla\NativeMessagingHosts\com.ytmp4.host" /ve /t REG_SZ /d "%MANFF%" /f >nul
+reg query "HKCU\Software\Google\Chrome\NativeMessagingHosts\com.ytmp4.host" >nul 2>nul
+if errorlevel 1 goto noreg
+echo        Chrome, Edge, Brave, Opera, Vivaldi y Firefox.
+"%PY%" "%HOSTDIR%\setup.py"
 set "CODE=%errorlevel%"
 echo.
 pause
 exit /b %CODE%
+
+:failed
+echo.
+echo  ERROR: no se pudieron crear los archivos del programa local en:
+echo  %HOSTDIR%
+echo  Descomprime el zip en una carpeta normal, por ejemplo C:\YT MP4, y vuelve a abrir install.bat.
+echo.
+pause
+exit /b 1
+
+:noreg
+echo.
+echo  ERROR: Windows no dejo registrar el programa en los navegadores.
+echo  Cierra esta ventana, haz clic derecho en install.bat y elige "Ejecutar como administrador".
+echo.
+pause
+exit /b 1
 
 :nopy
 echo.

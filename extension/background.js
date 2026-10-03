@@ -45,6 +45,15 @@ function flash(text, color) {
   }, 2000);
 }
 
+function nativeError(fallback) {
+  const raw = chrome.runtime.lastError?.message || '';
+  if (/not found/i.test(raw)) return 'El programa local no está conectado. Abre install.bat (en la carpeta de la extensión) y espera a que diga Todo listo.';
+  if (/forbidden/i.test(raw)) return 'El programa local no reconoce esta extensión. Abre install.bat de nuevo.';
+  if (/exited/i.test(raw)) return 'El programa local se cerró de golpe. Abre install.bat de nuevo.';
+  if (/communicating/i.test(raw)) return 'El programa local respondió algo raro. Abre install.bat de nuevo.';
+  return raw || fallback;
+}
+
 function notice(text) {
   chrome.storage.local.set({ notice: text });
 }
@@ -74,7 +83,7 @@ function run(job) {
   });
   port.onDisconnect.addListener(() => {
     if (!finished) {
-      const err = chrome.runtime.lastError?.message || 'El programa local se cerró.';
+      const err = nativeError('El programa local se cerró.');
       setJob(id, { state: 'error', error: err });
     }
   });
@@ -114,7 +123,7 @@ function ask(message, onReply) {
     port.disconnect();
   });
   port.onDisconnect.addListener(() => {
-    if (!answered) notice(chrome.runtime.lastError?.message || OLD_HOST);
+    if (!answered) notice(nativeError(OLD_HOST));
   });
   port.postMessage(message);
 }
@@ -166,7 +175,7 @@ async function checkUpdate(manual) {
     }
   });
   port.onDisconnect.addListener(() => {
-    if (!answered) setUpdate({ state: 'error', error: chrome.runtime.lastError?.message || OLD_HOST });
+    if (!answered) setUpdate({ state: 'error', error: nativeError(OLD_HOST) });
   });
   port.postMessage({ type: 'update', version: chrome.runtime.getManifest().version });
 }
