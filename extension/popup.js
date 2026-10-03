@@ -116,7 +116,7 @@ function row(id, j) {
   }
   const name = el('span', 'name', j.title || j.url);
   name.title = j.state === 'error' ? j.error || '' : j.path || j.title || '';
-  const metaText = j.state === 'downloading' ? `${Math.round(j.percent || 0)}%` : j.state === 'error' ? 'Error' : j.meta || '';
+  const metaText = j.state === 'downloading' ? `${j.status ? `${j.status} ` : ''}${Math.round(j.percent || 0)}%` : j.state === 'error' ? 'Error' : j.meta || '';
   li.append(lead, name, el('span', j.state === 'error' ? 'meta err' : 'meta', metaText));
   if (j.state === 'done' && j.path) li.append(tpl('t-reveal'));
   if (j.state === 'error' && j.url) li.append(tpl('t-retry'));

@@ -1,20 +1,14 @@
 import json
 import os
-import shutil
 import struct
 import subprocess
 import sys
-import tempfile
-import urllib.request
-import zipfile
 
 import tools
 
 EXTENSION_ID = "bcgedkiaohjneocngfolnbicpfeaiamm"
 GECKO_ID = "ytmp4@local"
 HOST_NAME = "com.ytmp4.host"
-FFMPEG_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-DENO_URL = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip"
 QUIET = "--update" in sys.argv
 
 
@@ -32,39 +26,15 @@ def fail(text):
     sys.exit(1)
 
 
-def fetch(url, dest, label):
-    req = urllib.request.Request(url, headers={"User-Agent": "yt-mp4"})
-    with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as f:
-        total = int(r.headers.get("Content-Length") or 0)
-        done = 0
-        shown = -1
-        while True:
-            chunk = r.read(1 << 20)
-            if not chunk:
-                break
-            f.write(chunk)
-            done += len(chunk)
-            if total and not QUIET:
-                pct = done * 100 // total
-                if pct // 10 != shown // 10:
-                    shown = pct
-                    print(f"\r       Descargando {label}: {pct}%", end="", flush=True)
-    say(f"\r       Descargando {label}: listo      ")
+class Progress:
+    def __init__(self, label):
+        self.label = label
+        self.shown = -1
 
-
-def extract(zip_path, wanted, target):
-    os.makedirs(target, exist_ok=True)
-    got = set()
-    with zipfile.ZipFile(zip_path) as z:
-        for info in z.infolist():
-            name = os.path.basename(info.filename).lower()
-            if name in wanted and not info.is_dir():
-                with z.open(info) as src, open(os.path.join(target, name), "wb") as dst:
-                    shutil.copyfileobj(src, dst)
-                got.add(name)
-    missing = set(wanted) - got
-    if missing:
-        fail(f"El archivo descargado no trae {', '.join(sorted(missing))}.")
+    def __call__(self, pct):
+        if not QUIET and pct // 5 != self.shown // 5:
+            self.shown = pct
+            print(f"\r       Descargando {self.label}: {pct}%   ", end="", flush=True)
 
 
 def ensure_ytdlp():
@@ -77,28 +47,14 @@ def ensure_ytdlp():
     say("       Listo.")
 
 
-def ensure_ffmpeg():
-    step(3, "Buscando ffmpeg")
-    if tools.ffmpeg_dir():
-        say("       Ya estaba instalado.")
-        return
-    with tempfile.TemporaryDirectory() as tmp:
-        z = os.path.join(tmp, "ffmpeg.zip")
-        fetch(FFMPEG_URL, z, "ffmpeg (unos 110 MB)")
-        extract(z, {"ffmpeg.exe", "ffprobe.exe"}, os.path.join(tools.TOOLS, "ffmpeg"))
-    say("       Listo.")
-
-
-def ensure_js():
-    step(4, "Buscando Deno o Node")
-    if tools.js_runtimes():
-        say("       Ya estaba instalado.")
-        return
-    with tempfile.TemporaryDirectory() as tmp:
-        z = os.path.join(tmp, "deno.zip")
-        fetch(DENO_URL, z, "Deno (unos 45 MB)")
-        extract(z, {"deno.exe"}, os.path.join(tools.TOOLS, "deno"))
-    say("       Listo.")
+def ensure_tool(n, title, label, ensure):
+    step(n, title)
+    try:
+        installed = ensure(Progress(label))
+    except RuntimeError as e:
+        say()
+        fail(f"{e} Revisa tu conexion a internet y vuelve a abrir install.bat.")
+    say("\r       Listo.                              " if installed else "       Ya estaba instalado.")
 
 
 def write_json(path, data):
@@ -148,8 +104,8 @@ def main():
         write_files()
         return
     ensure_ytdlp()
-    ensure_ffmpeg()
-    ensure_js()
+    ensure_tool(3, "Buscando ffmpeg", "ffmpeg (unos 110 MB, no cierres esta ventana)", tools.ensure_ffmpeg)
+    ensure_tool(4, "Buscando Deno o Node", "Deno (unos 45 MB)", tools.ensure_js)
     if QUIET:
         write_files()
         return

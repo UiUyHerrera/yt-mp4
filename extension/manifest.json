@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YT MP4",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Descarga videos de YouTube en MP4 o MP3.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsY8poTtp7ayyvlY971NEuc1UbRx5qwPetG5OIWCyTiDJfvWKxQyxNd0sxt8LnWOo/NLSB5DFgJEN3d83zwqvO/ApRKLYEx5tp6boTcNYRTAZ+gRjdRIwm9ryG9GYT+SXakuTehGv/MzONrAFisoYHDag4/XL8ZfdkXaZYY1Mgm/8etdg1RfnIFBrlZwBQekWruGMnu+rmhaOfsjL4DCWi9TWssemyIGrr7FOqFJvU/l85LC+cISOQMckzsdn9B45Mgen3SqlN+J3hezSE5kFgAFEjpNcop3evaWynPjwQud/boO/uf+suPx4lthpN0U6hmNg8o7N23CdW1DsortcTwIDAQAB",
   "permissions": ["nativeMessaging", "tabs", "storage", "alarms"],

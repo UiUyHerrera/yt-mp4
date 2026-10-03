@@ -232,12 +232,30 @@ def reveal(path):
     send({"type": "revealed"})
 
 
+def ensure_tools():
+    for label, present, ensure in (("ffmpeg", tools.ffmpeg_dir, tools.ensure_ffmpeg), ("Deno", tools.js_runtimes, tools.ensure_js)):
+        if present():
+            continue
+        send({"type": "status", "text": f"Instalando {label}"})
+        last = [-2]
+
+        def progress(pct):
+            if pct - last[0] >= 2:
+                last[0] = pct
+                send({"type": "progress", "percent": pct})
+
+        ensure(progress)
+        send({"type": "status", "text": ""})
+        send({"type": "progress", "percent": 0})
+
+
 def download(url, quality, folder):
     yt_dlp = load_ytdlp()
     state = {"last": -1.0}
     mp3 = quality.startswith("mp3")
     kbps = quality.split("-")[1] if "-" in quality else "320"
     target = resolve_folder(folder)
+    ensure_tools()
 
     def hook(d):
         if d["status"] == "downloading":

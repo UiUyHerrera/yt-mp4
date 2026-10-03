@@ -72,6 +72,7 @@ function run(job) {
   port.onMessage.addListener((msg) => {
     if (msg.type === 'info') setJob(id, { title: msg.title });
     if (msg.type === 'progress') setJob(id, { percent: msg.percent });
+    if (msg.type === 'status') setJob(id, { status: msg.text });
     if (msg.type === 'done') {
       finished = true;
       setJob(id, { state: 'done', percent: 100, file: msg.file, path: msg.path });
