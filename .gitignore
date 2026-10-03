@@ -1,0 +1,6 @@
+dist/
+tools/
+__pycache__/
+host/host.bat
+host/*.json
+host/.ytdlp-checked

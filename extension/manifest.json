@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "YT MP4",
+  "version": "1.5.0",
+  "description": "Descarga videos de YouTube en MP4 o MP3.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsY8poTtp7ayyvlY971NEuc1UbRx5qwPetG5OIWCyTiDJfvWKxQyxNd0sxt8LnWOo/NLSB5DFgJEN3d83zwqvO/ApRKLYEx5tp6boTcNYRTAZ+gRjdRIwm9ryG9GYT+SXakuTehGv/MzONrAFisoYHDag4/XL8ZfdkXaZYY1Mgm/8etdg1RfnIFBrlZwBQekWruGMnu+rmhaOfsjL4DCWi9TWssemyIGrr7FOqFJvU/l85LC+cISOQMckzsdn9B45Mgen3SqlN+J3hezSE5kFgAFEjpNcop3evaWynPjwQud/boO/uf+suPx4lthpN0U6hmNg8o7N23CdW1DsortcTwIDAQAB",
+  "permissions": ["nativeMessaging", "tabs", "storage", "alarms"],
+  "background": { "service_worker": "background.js", "scripts": ["background.js"] },
+  "action": { "default_popup": "popup.html", "default_title": "Descargar MP4 / MP3" },
+  "commands": {
+    "download-mp4": {
+      "suggested_key": { "default": "Ctrl+Shift+4" },
+      "description": "Descargar el video abierto en MP4"
+    },
+    "download-mp3": {
+      "suggested_key": { "default": "Ctrl+Shift+3" },
+      "description": "Descargar el video abierto en MP3"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ytmp4@local",
+      "strict_min_version": "128.0",
+      "data_collection_permissions": { "required": ["none"] }
+    }
+  }
+}
