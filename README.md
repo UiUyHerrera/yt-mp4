@@ -1,6 +1,6 @@
-# Descargar canciones o videos de YT
+# mpeasy
 
-Extensión para Edge, Chrome, Brave y Firefox que baja cualquier video de YouTube como video (MP4) o como canción (MP3).
+Descargar canciones o videos de YT. Extensión para Edge, Chrome, Brave y Firefox que baja cualquier video de YouTube como video (MP4) o como canción (MP3).
 
 ## Cómo funciona
 
@@ -16,7 +16,9 @@ También puedes descargar con el teclado, sin abrir la extensión:
 - `Ctrl + Shift + 4` baja el video.
 - `Ctrl + Shift + 3` baja la canción.
 
-La extensión se actualiza sola cuando sale una versión nueva.
+Cada descarga se puede pausar, reanudar o cancelar desde la lista.
+
+La extensión se actualiza sola cuando sale una versión nueva y te muestra la lista de cambios.
 
 Por dentro, la extensión le pasa el link a un programa que corre en tu PC y que hace la descarga. Por eso hay que abrir el instalador una vez.
 

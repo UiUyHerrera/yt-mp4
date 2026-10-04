@@ -111,7 +111,7 @@ def main():
         return
     selftest()
     say()
-    say(" Todo listo.")
+    say(" Todo listo. mpeasy ya esta instalado.")
     say(" Chrome / Edge / Brave: abre la pagina de extensiones, activa el modo desarrollador")
     say(' y usa "Cargar descomprimida" con la carpeta:')
     say(f"   {os.path.join(tools.ROOT, 'extension')}")

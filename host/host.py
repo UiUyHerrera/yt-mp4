@@ -6,6 +6,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 import zipfile
@@ -15,12 +16,15 @@ sys.stdout = sys.stderr
 
 import tools
 
+SEND_LOCK = threading.Lock()
+
 
 def send(msg):
     data = json.dumps(msg).encode("utf-8")
-    out.write(struct.pack("<I", len(data)))
-    out.write(data)
-    out.flush()
+    with SEND_LOCK:
+        out.write(struct.pack("<I", len(data)))
+        out.write(data)
+        out.flush()
 
 
 def receive():
@@ -33,6 +37,53 @@ def receive():
 
 CLIENTS = [None, ["tv", "android_vr"], ["web_safari", "mweb"], ["ios"]]
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+class Cancelled(BaseException):
+    pass
+
+
+class Control:
+    def __init__(self):
+        self.cancelled = threading.Event()
+        self.running = threading.Event()
+        self.running.set()
+
+    def listen(self):
+        while True:
+            try:
+                msg = receive()
+            except (OSError, ValueError):
+                msg = None
+            if not isinstance(msg, dict):
+                self.cancelled.set()
+                self.running.set()
+                return
+            kind = msg.get("type")
+            if kind == "pause" and not self.cancelled.is_set():
+                self.running.clear()
+                send({"type": "paused"})
+            elif kind == "resume":
+                self.running.set()
+                send({"type": "resumed"})
+            elif kind == "cancel":
+                self.cancelled.set()
+                self.running.set()
+
+    def checkpoint(self):
+        self.running.wait()
+        if self.cancelled.is_set():
+            raise Cancelled()
+
+
+def remove_created(paths, since):
+    for path in paths:
+        for candidate in (path, path + ".part", path + ".ytdl"):
+            try:
+                if os.path.isfile(candidate) and os.path.getmtime(candidate) >= since:
+                    os.remove(candidate)
+            except OSError:
+                pass
 
 
 MISSING = "Falta yt-dlp en este PC. Abre install.bat de la extension."
@@ -135,6 +186,7 @@ def update(current):
     asset = next((a for a in release.get("assets", []) if a.get("name") == "yt-mp4.zip"), None)
     if not asset:
         raise RuntimeError(f"La version {latest} no trae yt-mp4.zip.")
+    send({"type": "update-found", "version": latest})
     with tempfile.TemporaryDirectory() as tmp:
         z = os.path.join(tmp, "yt-mp4.zip")
         with http_get(asset["browser_download_url"]) as r, open(z, "wb") as f:
@@ -232,7 +284,7 @@ def reveal(path):
     send({"type": "revealed"})
 
 
-def ensure_tools():
+def ensure_tools(control):
     for label, present, ensure in (("ffmpeg", tools.ffmpeg_dir, tools.ensure_ffmpeg), ("Deno", tools.js_runtimes, tools.ensure_js)):
         if present():
             continue
@@ -240,6 +292,7 @@ def ensure_tools():
         last = [-2]
 
         def progress(pct):
+            control.checkpoint()
             if pct - last[0] >= 2:
                 last[0] = pct
                 send({"type": "progress", "percent": pct})
@@ -249,22 +302,31 @@ def ensure_tools():
         send({"type": "progress", "percent": 0})
 
 
-def download(url, quality, folder):
+def download(url, quality, folder, control):
     yt_dlp = load_ytdlp()
     state = {"last": -1.0}
     mp3 = quality.startswith("mp3")
     kbps = quality.split("-")[1] if "-" in quality else "320"
     target = resolve_folder(folder)
-    ensure_tools()
+    ensure_tools(control)
+    started = time.time() - 2
+    created = set()
 
     def hook(d):
+        control.checkpoint()
         if d["status"] == "downloading":
+            for key in ("tmpfilename", "filename"):
+                if d.get(key):
+                    created.add(d[key])
             total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
             if total:
                 pct = round(d.get("downloaded_bytes", 0) * 100 / total, 1)
                 if abs(pct - state["last"]) >= 1 or pct >= 100:
                     state["last"] = pct
                     send({"type": "progress", "percent": pct})
+
+    def pp_hook(d):
+        control.checkpoint()
 
     opts = {
         "format": "ba/b" if mp3 else fmt(quality),
@@ -275,6 +337,7 @@ def download(url, quality, folder):
         "no_warnings": True,
         "noprogress": True,
         "progress_hooks": [hook],
+        "postprocessor_hooks": [pp_hook],
         "js_runtimes": tools.js_runtimes() or {"deno": {}, "node": {}},
         "windowsfilenames": True,
         "no_color": True,
@@ -303,13 +366,19 @@ def download(url, quality, folder):
         try:
             with yt_dlp.YoutubeDL(run) as ydl:
                 info = ydl.extract_info(url, download=False)
+                control.checkpoint()
                 send({"type": "info", "title": info.get("title", url)})
+                base = os.path.splitext(ydl.prepare_filename(info))[0]
+                created.update(base + ext for ext in (".webp", ".jpg", ".png", ".mp3", ".mp4", ".m4a", ".webm", ".temp.mp4"))
                 ydl.process_ie_result(info, download=True)
                 path = info.get("requested_downloads", [{}])[0].get("filepath") or ydl.prepare_filename(info)
                 if mp3:
                     path = os.path.splitext(path)[0] + ".mp3"
                 send({"type": "done", "file": os.path.basename(path), "path": path})
                 return
+        except Cancelled:
+            remove_created(created, started)
+            raise
         except yt_dlp.utils.DownloadError as e:
             last = e
             if "403" not in str(e):
@@ -340,11 +409,15 @@ def main():
         except Exception as e:
             send({"type": "error", "message": f"No se pudo actualizar: {ANSI.sub('', str(e))[:200]}"})
         return
+    control = Control()
+    threading.Thread(target=control.listen, daemon=True).start()
     try:
         quality = msg.get("quality", "720")
         if quality == "mp3":
             quality = "mp3-320"
-        download(msg["url"], quality, msg.get("folder"))
+        download(msg["url"], quality, msg.get("folder"), control)
+    except Cancelled:
+        send({"type": "cancelled"})
     except Exception as e:
         msg = ANSI.sub("", str(e)).replace("ERROR: ", "")
         if "403" in msg:
@@ -353,4 +426,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        with SEND_LOCK:
+            out.flush()
+        sys.stderr.flush()
+        os._exit(0)

@@ -2,57 +2,43 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<title>mpeasy</title>
 <style>
   :root {
-    --bg: #fbfbfd;
-    --fill: rgba(118, 118, 128, 0.12);
-    --fill-strong: rgba(118, 118, 128, 0.2);
-    --label: #1d1d1f;
-    --secondary: #636366;
-    --separator: rgba(60, 60, 67, 0.16);
-    --blue: #0066d6;
-    --button: #0066d6;
-    --button-press: #0058bd;
-    --green: #248a3d;
-    --red: #d70015;
-    --thumb: #ffffff;
-    --thumb-bg: #2c2c2e;
-    color-scheme: light dark;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #1c1c1e;
-      --fill: rgba(118, 118, 128, 0.24);
-      --fill-strong: rgba(118, 118, 128, 0.36);
-      --label: #f5f5f7;
-      --secondary: #a1a1a6;
-      --separator: rgba(84, 84, 88, 0.6);
-      --blue: #409cff;
-      --button: #0071e3;
-      --button-press: #0066d6;
-      --green: #30d158;
-      --red: #ff6961;
-      --thumb: #636366;
-      --thumb-bg: #3a3a3c;
-    }
+    --bg: #000000;
+    --fill: #1c1c1e;
+    --fill-strong: #2c2c2e;
+    --label: #f5f5f7;
+    --secondary: #a1a1a6;
+    --separator: #38383a;
+    --accent: #ffffff;
+    --button: #0047b3;
+    --button-press: #003c96;
+    --green: #30d158;
+    --red: #ff6961;
+    --thumb: #48484a;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; background: var(--bg); }
   body {
     width: 320px;
-    padding: 16px;
+    padding: 16px 16px 8px;
     color: var(--label);
     font: 13px/1.38 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+    scrollbar-color: var(--thumb) var(--bg);
   }
+  ::selection { background: var(--accent); color: var(--bg); }
   button, select { font: inherit; color: inherit; }
-  :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   .video { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; min-height: 36px; }
   .video .t { flex: 1; min-width: 0; }
   .thumb {
     flex: none; width: 64px; height: 36px; border-radius: 6px; overflow: hidden;
-    background: var(--thumb-bg); display: grid; place-items: center; color: #fff;
+    background: var(--fill); display: grid; place-items: center; color: var(--label);
   }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .video .t { font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -65,7 +51,7 @@
   .seg::before {
     content: ""; position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px);
     border-radius: 7px; background: var(--thumb);
-    box-shadow: 0 3px 8px rgba(0,0,0,.12), 0 1px 1px rgba(0,0,0,.04);
+    box-shadow: 0 3px 8px rgba(0,0,0,.5), 0 1px 1px rgba(0,0,0,.3);
     transition: transform .25s cubic-bezier(.3,.7,.4,1);
   }
   .seg[data-mode="audio"]::before { transform: translateX(100%); }
@@ -83,22 +69,20 @@
   .row .k { flex: none; }
   .row .v { flex: 1; min-width: 0; text-align: right; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chev { flex: none; color: var(--secondary); opacity: .7; }
-  button.row { cursor: pointer; }
-  button.row:active { background: var(--fill); }
   .row select.overlay {
     position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0 12px;
     opacity: 0; border: 0; cursor: pointer; font: inherit; text-align: left;
   }
-  .row:has(select:focus-visible) { box-shadow: inset 0 0 0 2px var(--blue); border-radius: 10px; }
+  .row:has(select:focus-visible) { box-shadow: inset 0 0 0 2px var(--accent); border-radius: 10px; }
   .row input {
     flex: 1; min-width: 0; border: 0; background: transparent; color: var(--label); font: inherit;
-    text-align: right; height: 44px; padding: 0; outline: none; text-overflow: ellipsis;
+    text-align: right; height: 44px; padding: 0; outline: none; text-overflow: ellipsis; caret-color: var(--accent);
   }
   .row input::placeholder { color: var(--secondary); opacity: 1; }
-  .row:has(input:focus-visible) { box-shadow: inset 0 0 0 2px var(--blue); border-radius: 10px; }
+  .row:has(input:focus-visible) { box-shadow: inset 0 0 0 2px var(--accent); border-radius: 10px; }
   .pick {
     flex: none; width: 44px; height: 44px; margin-right: -12px; border: 0; background: transparent;
-    color: var(--blue); display: grid; place-items: center; cursor: pointer; border-radius: 8px;
+    color: var(--accent); display: grid; place-items: center; cursor: pointer; border-radius: 8px;
   }
   .pick:active { opacity: .6; }
 
@@ -113,31 +97,61 @@
   .go:disabled { opacity: .4; cursor: not-allowed; transform: none; background: var(--button); }
 
   .notice { margin: 8px 0 0; color: var(--red); font-size: 12px; }
-  .group + .go { margin-top: 12px; }
 
   .head { display: flex; align-items: center; justify-content: space-between; margin: 16px 0 2px; min-height: 28px; }
   .head h2 { margin: 0; font-size: 13px; font-weight: 600; }
-  .link { border: 0; background: transparent; color: var(--blue); font-size: 12px; cursor: pointer; padding: 6px 0 6px 12px; min-height: 28px; }
+  .link { border: 0; background: transparent; color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; padding: 6px 0 6px 12px; min-height: 28px; }
+  .link:hover { text-decoration: underline; text-underline-offset: 3px; }
 
   .list { list-style: none; margin: 0; padding: 0; max-height: 176px; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
-  .item { display: flex; align-items: center; gap: 10px; height: 44px; padding-right: 12px; position: relative; }
+  .item { display: flex; align-items: center; gap: 10px; height: 44px; position: relative; }
   .item + .item::before { content: ""; position: absolute; top: 0; left: 30px; right: 0; height: 0.5px; background: var(--separator); }
   .ring { flex: none; width: 20px; height: 20px; }
   .ring circle { fill: none; stroke-width: 2.5; }
   .ring .bg { stroke: var(--fill-strong); }
-  .ring .fg { stroke: var(--blue); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset .3s; }
+  .ring .fg { stroke: var(--accent); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset .3s, stroke .2s; }
+  .item.paused .ring .fg { stroke: var(--secondary); }
   .ic { flex: none; width: 20px; height: 20px; display: grid; place-items: center; }
   .ic.ok { color: var(--green); }
   .ic.err { color: var(--red); }
+  .ic.off { color: var(--thumb); }
   .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item.cancelled .name { color: var(--secondary); }
   .meta { flex: none; color: var(--secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
   .meta.err { color: var(--red); }
+  .acts { flex: none; display: flex; margin-right: -8px; }
   .act {
-    flex: none; width: 44px; height: 44px; margin: 0 -12px 0 -8px; border: 0; background: transparent;
+    flex: none; width: 34px; height: 44px; border: 0; background: transparent;
     color: var(--secondary); display: grid; place-items: center; cursor: pointer; border-radius: 8px;
   }
-  .act:hover { color: var(--blue); }
+  .act:hover { color: var(--accent); }
+  .act:active { opacity: .6; }
   .empty { color: var(--secondary); padding: 10px 0 2px; font-size: 12px; }
+
+  .banner {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 12px;
+    border-radius: 10px; background: var(--fill);
+  }
+  .banner b { font-weight: 600; }
+  .banner small { display: block; color: var(--secondary); font-size: 11px; }
+  .spin { flex: none; width: 16px; height: 16px; animation: spin .9s linear infinite; }
+  .spin circle { fill: none; stroke-width: 2.5; }
+  .spin .bg { stroke: var(--fill-strong); }
+  .spin .fg { stroke: var(--accent); stroke-linecap: round; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .news { margin-bottom: 12px; padding: 10px 12px 10px 14px; border-radius: 10px; background: var(--fill); }
+  .news header { display: flex; align-items: center; justify-content: space-between; margin: -6px -10px 4px 0; }
+  .news h2 { margin: 0; font-size: 13px; font-weight: 600; }
+  .news ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+  .news li { position: relative; padding-left: 12px; color: var(--secondary); font-size: 12px; line-height: 1.35; }
+  #whatsNew:not([hidden]) ~ .list, #updateBanner:not([hidden]) ~ .list { max-height: 132px; }
+  .news li::before { content: ""; position: absolute; left: 0; top: .6em; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); }
+  .x {
+    flex: none; width: 32px; height: 32px; border: 0; background: transparent; color: var(--secondary);
+    display: grid; place-items: center; cursor: pointer; border-radius: 8px;
+  }
+  .x:hover { color: var(--accent); }
 
   .kbd {
     flex: none; display: flex; gap: 3px; align-items: center; border: 0; background: transparent;
@@ -149,26 +163,32 @@
     font-variant-numeric: tabular-nums;
   }
   .kbd.none span, .kbd.rec span { color: var(--secondary); }
-  .kbd.rec span { box-shadow: 0 0 0 1.5px var(--blue); }
+  .kbd.rec span { box-shadow: 0 0 0 1.5px var(--accent); }
   .hint { color: var(--secondary); font-size: 11px; margin: 6px 0 0; }
 
   .icon {
     flex: none; width: 44px; height: 44px; margin: -4px -12px -4px auto; border: 0; background: transparent;
     color: var(--secondary); display: grid; place-items: center; cursor: pointer; border-radius: 10px;
   }
-  .icon:hover { color: var(--label); }
+  .icon:hover { color: var(--accent); }
   .icon:active { opacity: .6; }
 
   .bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; margin: -10px 0 4px; min-height: 44px; }
   .bar h1 { margin: 0; font-size: 13px; font-weight: 600; grid-column: 2; }
   .back {
     grid-column: 1; justify-self: start; display: flex; align-items: center; gap: 6px;
-    min-height: 44px; padding: 0 12px 0 0; border: 0; background: transparent; color: var(--blue); cursor: pointer;
+    min-height: 44px; padding: 0 12px 0 0; border: 0; background: transparent; color: var(--accent); font-weight: 600; cursor: pointer;
   }
   .sec { margin: 16px 0 6px; font-size: 13px; font-weight: 600; }
-  .rowlink { margin-left: auto; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--blue); cursor: pointer; }
-  .rowlink:disabled { color: var(--secondary); cursor: default; }
+  .rowlink { margin-left: auto; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--accent); font-weight: 600; cursor: pointer; }
+  .rowlink:disabled { color: var(--secondary); font-weight: 400; cursor: default; }
   .bar + .sec { margin-top: 8px; }
+
+  .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; min-height: 32px; }
+  .brand { color: var(--secondary); font-size: 11px; font-weight: 600; letter-spacing: .01em; }
+  .gh { display: grid; place-items: center; width: 32px; height: 32px; margin-right: -7px; border-radius: 8px; opacity: .75; transition: opacity .15s; }
+  .gh:hover, .gh:focus-visible { opacity: 1; }
+  .gh img { width: 18px; height: 18px; display: block; }
 
   .view.in-right { animation: in-right .22s cubic-bezier(.3,.7,.4,1); }
   .view.in-left { animation: in-left .22s cubic-bezier(.3,.7,.4,1); }
@@ -180,6 +200,19 @@
 </head>
 <body>
   <div class="view" id="main">
+    <section class="banner" id="updateBanner" role="status" hidden>
+      <svg class="spin" viewBox="0 0 16 16" aria-hidden="true"><circle class="bg" cx="8" cy="8" r="6.5"/><circle class="fg" cx="8" cy="8" r="6.5" stroke-dasharray="12 40.8"/></svg>
+      <div><b id="updateTitle"></b><small>Se instala sola en unos segundos.</small></div>
+    </section>
+
+    <section class="news" id="whatsNew" hidden>
+      <header>
+        <h2 id="whatsNewTitle"></h2>
+        <button type="button" class="x" id="closeNews" aria-label="Cerrar novedades" title="Cerrar"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m2 2 8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      </header>
+      <ul id="whatsNewList"></ul>
+    </section>
+
     <header class="video">
       <div class="thumb" id="thumb" aria-hidden="true">
         <svg width="14" height="14" viewBox="0 0 14 14"><path d="M4 2.5v9l7.5-4.5z" fill="currentColor"/></svg>
@@ -260,11 +293,20 @@
     <p class="notice" hidden></p>
   </div>
 
-  <template id="t-ok"><span class="ic ok" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="currentColor"/><path d="m6 10.2 2.6 2.6L14 7.6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></template>
-  <template id="t-err"><span class="ic err" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="currentColor"/><path d="M10 5.5v5.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="10" cy="14.2" r="1.2" fill="#fff"/></svg></span></template>
+  <footer class="foot">
+    <span class="brand">mpeasy</span>
+    <a class="gh" href="https://github.com/UiUyHerrera/yt-mp4" target="_blank" rel="noopener noreferrer" aria-label="mpeasy en GitHub" title="mpeasy en GitHub"><img src="icons/github.png" alt="" width="18" height="18"></a>
+  </footer>
+
+  <template id="t-ok"><span class="ic ok" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="currentColor"/><path d="m6 10.2 2.6 2.6L14 7.6" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></template>
+  <template id="t-err"><span class="ic err" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="currentColor"/><path d="M10 5.5v5.5" stroke="#000" stroke-width="2" stroke-linecap="round"/><circle cx="10" cy="14.2" r="1.2" fill="#000"/></svg></span></template>
+  <template id="t-off"><span class="ic off" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="currentColor"/><path d="m7 7 6 6M13 7l-6 6" stroke="#a1a1a6" stroke-width="1.8" stroke-linecap="round"/></svg></span></template>
   <template id="t-ring"><svg class="ring" viewBox="0 0 20 20" aria-hidden="true"><circle class="bg" cx="10" cy="10" r="8"/><circle class="fg" cx="10" cy="10" r="8"/></svg></template>
   <template id="t-reveal"><button class="act" type="button" data-act="reveal" aria-label="Mostrar en carpeta" title="Mostrar en carpeta"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 4.25c0-.83.67-1.5 1.5-1.5h3l1.5 1.5h5c.83 0 1.5.67 1.5 1.5v6c0 .83-.67 1.5-1.5 1.5h-9.5c-.83 0-1.5-.67-1.5-1.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></button></template>
-  <template id="t-retry"><button class="act" type="button" data-act="retry" aria-label="Reintentar" title="Reintentar"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></template>
+  <template id="t-retry"><button class="act" type="button" data-act="retry" aria-label="Volver a descargar" title="Volver a descargar"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.5v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></template>
+  <template id="t-pause"><button class="act" type="button" data-act="pause" aria-label="Pausar" title="Pausar"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/><rect x="9.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/></svg></button></template>
+  <template id="t-resume"><button class="act" type="button" data-act="resume" aria-label="Reanudar" title="Reanudar"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.8v10.4c0 .6.66.97 1.17.65l8.2-5.2a.77.77 0 0 0 0-1.3l-8.2-5.2a.77.77 0 0 0-1.17.65z" fill="currentColor"/></svg></button></template>
+  <template id="t-cancel"><button class="act" type="button" data-act="cancel" aria-label="Cancelar descarga" title="Cancelar"><svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="m2 2 8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></template>
 
   <script src="popup.js"></script>
 </body>

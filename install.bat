@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableExtensions
-title YT MP4 - Instalador
+title mpeasy - Instalador
 cd /d "%~dp0"
 set "PYURL=https://www.python.org/ftp/python/3.13.12/python-3.13.12-amd64.exe"
 set "HOSTDIR=%~dp0host"
 set "MAN=%~dp0host\com.ytmp4.host.json"
 set "MANFF=%~dp0host\com.ytmp4.host.firefox.json"
 echo.
-echo  YT MP4 - Instalador
+echo  mpeasy - Instalador
 echo.
 call :findpy
 if defined PY goto havepy

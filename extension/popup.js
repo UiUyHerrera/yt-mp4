@@ -7,6 +7,17 @@ const QKEY = { video: 'qualityVideo', audio: 'qualityAudio' };
 const PICK_TITLE = { folderMp4: 'Carpeta para MP4', folderMp3: 'Carpeta para MP3' };
 const CIRC = 2 * Math.PI * 8;
 const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBrowserInfo === 'function';
+const VERSION = chrome.runtime.getManifest().version;
+const ACTIVE = ['downloading', 'paused', 'cancelling'];
+const CHANGES = {
+  '1.6.0': [
+    'Nuevo nombre y logo: mpeasy.',
+    'Pausa, reanuda o cancela cada descarga.',
+    'Diseño negro con detalles en blanco.',
+    'Aviso al bajar actualizaciones.',
+    'Botón de GitHub abajo a la derecha.',
+  ],
+};
 
 const segEl = document.getElementById('seg');
 const qualityEl = document.getElementById('quality');
@@ -22,6 +33,8 @@ const listEl = document.getElementById('list');
 const clearEl = document.getElementById('clear');
 const titleEl = document.getElementById('title');
 const thumbEl = document.getElementById('thumb');
+const bannerEl = document.getElementById('updateBanner');
+const newsEl = document.getElementById('whatsNew');
 
 const state = { mode: 'video', qualityVideo: DEFAULT.video, qualityAudio: DEFAULT.audio, folderMp4: '', folderMp3: '' };
 let tab = null;
@@ -102,24 +115,37 @@ function show(view) {
   (settings ? closeSettingsEl : openSettingsEl).focus({ preventScroll: true });
 }
 
+function metaFor(j) {
+  const pct = `${Math.round(j.percent || 0)}%`;
+  if (j.state === 'downloading') return j.status ? `${j.status} ${pct}` : pct;
+  if (j.state === 'paused') return `Pausada ${pct}`;
+  if (j.state === 'cancelling') return 'Cancelando…';
+  if (j.state === 'cancelled') return 'Cancelada';
+  if (j.state === 'error') return 'Error';
+  return j.meta || '';
+}
+
 function row(id, j) {
-  const li = el('li', 'item');
+  const li = el('li', `item ${j.state}`);
   li.dataset.id = id;
   let lead;
-  if (j.state === 'downloading') {
+  if (ACTIVE.includes(j.state)) {
     lead = tpl('t-ring');
     const fg = lead.querySelector('.fg');
     fg.setAttribute('stroke-dasharray', CIRC);
     fg.setAttribute('stroke-dashoffset', CIRC * (1 - (j.percent || 0) / 100));
   } else {
-    lead = tpl(j.state === 'done' ? 't-ok' : 't-err');
+    lead = tpl(j.state === 'done' ? 't-ok' : j.state === 'cancelled' ? 't-off' : 't-err');
   }
   const name = el('span', 'name', j.title || j.url);
   name.title = j.state === 'error' ? j.error || '' : j.path || j.title || '';
-  const metaText = j.state === 'downloading' ? `${j.status ? `${j.status} ` : ''}${Math.round(j.percent || 0)}%` : j.state === 'error' ? 'Error' : j.meta || '';
-  li.append(lead, name, el('span', j.state === 'error' ? 'meta err' : 'meta', metaText));
-  if (j.state === 'done' && j.path) li.append(tpl('t-reveal'));
-  if (j.state === 'error' && j.url) li.append(tpl('t-retry'));
+  li.append(lead, name, el('span', j.state === 'error' ? 'meta err' : 'meta', metaFor(j)));
+  const acts = el('span', 'acts');
+  if (j.state === 'downloading') acts.append(tpl('t-pause'), tpl('t-cancel'));
+  if (j.state === 'paused') acts.append(tpl('t-resume'), tpl('t-cancel'));
+  if (j.state === 'done' && j.path) acts.append(tpl('t-reveal'));
+  if ((j.state === 'error' || j.state === 'cancelled') && j.url) acts.append(tpl('t-retry'));
+  if (acts.childElementCount) li.append(acts);
   return li;
 }
 
@@ -127,30 +153,44 @@ function render(jobs) {
   const list = Object.entries(jobs).sort((a, b) => b[0] - a[0]);
   if (!list.length) listEl.replaceChildren(el('li', 'empty', 'Lo que descargues aparece aquí.'));
   else listEl.replaceChildren(...list.map(([id, j]) => row(id, j)));
-  clearEl.hidden = !list.some(([, j]) => j.state !== 'downloading');
+  clearEl.hidden = !list.some(([, j]) => !ACTIVE.includes(j.state));
   const latest = list[0] && list[0][1];
   showNotice(hostNotice || (latest && latest.state === 'error' ? latest.error : ''));
 }
 
 const UPDATE_TEXT = {
-  uptodate: () => 'Estás al día. Se revisa sola cada 6 horas.',
+  uptodate: () => 'Estás al día. Se revisa sola al abrir mpeasy y cada 6 horas.',
   disabled: () => 'Las actualizaciones automáticas no están configuradas.',
   checking: () => 'Buscando actualizaciones…',
+  downloading: (u) => `Descargando la versión ${u.version}…`,
   busy: () => 'Espera a que terminen las descargas y vuelve a intentar.',
   updated: (u) => `Actualizada a la versión ${u.version}.`,
   error: (u) => u.error || 'No se pudo buscar actualizaciones.',
 };
 
+function liveUpdateState(u) {
+  let state = u && UPDATE_TEXT[u.state] ? u.state : null;
+  if ((state === 'checking' || state === 'downloading') && Date.now() - u.at > 600000) state = null;
+  if (state === 'updated' && u.version !== VERSION) state = null;
+  return state;
+}
+
 function paintUpdate(u) {
-  const version = chrome.runtime.getManifest().version;
-  document.getElementById('version').textContent = `Versión ${version}`;
-  const hint = document.getElementById('updateHint');
-  const button = document.getElementById('checkUpdate');
-  let state = u && u.state;
-  if (state === 'checking' && Date.now() - u.at > 180000) state = null;
-  if (state === 'updated' && u.version !== version) state = null;
-  hint.textContent = state ? UPDATE_TEXT[state](u) : 'Se revisa sola cada 6 horas.';
-  button.disabled = state === 'checking';
+  document.getElementById('version').textContent = `Versión ${VERSION}`;
+  const state = liveUpdateState(u);
+  document.getElementById('updateHint').textContent = state ? UPDATE_TEXT[state](u) : 'Se revisa sola al abrir mpeasy y cada 6 horas.';
+  document.getElementById('checkUpdate').disabled = state === 'checking' || state === 'downloading';
+  const downloading = state === 'downloading';
+  bannerEl.hidden = !downloading;
+  if (downloading) document.getElementById('updateTitle').textContent = `Descargando mpeasy ${u.version}…`;
+}
+
+function paintNews(show) {
+  const items = CHANGES[VERSION];
+  newsEl.hidden = !(show && items);
+  if (newsEl.hidden) return;
+  document.getElementById('whatsNewTitle').textContent = `Novedades de la ${VERSION}`;
+  document.getElementById('whatsNewList').replaceChildren(...items.map((text) => el('li', null, text)));
 }
 
 function chips(button, shortcut) {
@@ -232,6 +272,12 @@ document.querySelectorAll('.kbd').forEach((b) => {
 });
 
 document.getElementById('checkUpdate').addEventListener('click', () => chrome.runtime.sendMessage({ type: 'update' }));
+
+document.getElementById('closeNews').addEventListener('click', () => {
+  chrome.storage.local.set({ seenVersion: VERSION });
+  paintNews(false);
+  goEl.focus({ preventScroll: true });
+});
 
 openSettingsEl.addEventListener('click', () => show('settings'));
 closeSettingsEl.addEventListener('click', () => show('main'));
@@ -342,6 +388,12 @@ chrome.storage.local.get(null).then((data) => {
   hostNotice = merged.notice || '';
   render(merged.jobs || {});
   paintUpdate(merged.update);
+  const justUpdated = merged.update?.state === 'updated' && merged.update.version === VERSION;
+  const pending = merged.seenVersion !== VERSION && (justUpdated || merged.newsFor === VERSION || !!merged.seenVersion);
+  if (pending && merged.newsFor !== VERSION) chrome.storage.local.set({ newsFor: VERSION });
+  if (!pending && !merged.seenVersion) chrome.storage.local.set({ seenVersion: VERSION });
+  paintNews(pending);
+  chrome.runtime.sendMessage({ type: 'update', auto: true });
   if (merged.reopenSettings) {
     chrome.storage.local.set({ reopenSettings: false });
     mainEl.hidden = true;

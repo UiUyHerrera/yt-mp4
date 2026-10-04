@@ -1,12 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "YT MP4",
-  "version": "1.5.2",
-  "description": "Descarga videos de YouTube en MP4 o MP3.",
+  "name": "mpeasy",
+  "version": "1.6.0",
+  "description": "Descarga canciones o videos de YouTube en MP3 o MP4.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsY8poTtp7ayyvlY971NEuc1UbRx5qwPetG5OIWCyTiDJfvWKxQyxNd0sxt8LnWOo/NLSB5DFgJEN3d83zwqvO/ApRKLYEx5tp6boTcNYRTAZ+gRjdRIwm9ryG9GYT+SXakuTehGv/MzONrAFisoYHDag4/XL8ZfdkXaZYY1Mgm/8etdg1RfnIFBrlZwBQekWruGMnu+rmhaOfsjL4DCWi9TWssemyIGrr7FOqFJvU/l85LC+cISOQMckzsdn9B45Mgen3SqlN+J3hezSE5kFgAFEjpNcop3evaWynPjwQud/boO/uf+suPx4lthpN0U6hmNg8o7N23CdW1DsortcTwIDAQAB",
   "permissions": ["nativeMessaging", "tabs", "storage", "alarms"],
   "background": { "service_worker": "background.js", "scripts": ["background.js"] },
-  "action": { "default_popup": "popup.html", "default_title": "Descargar MP4 / MP3" },
+  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "mpeasy",
+    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png" }
+  },
   "commands": {
     "download-mp4": {
       "suggested_key": { "default": "Ctrl+Shift+4" },
