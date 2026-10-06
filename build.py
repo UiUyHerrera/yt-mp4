@@ -3,7 +3,7 @@ import os
 import zipfile
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-FILES = ["install.bat", "update.json", "README.md", "host/host.py", "host/setup.py", "host/tools.py"]
+FILES = ["install.bat", "update.json", "host/host.py", "host/setup.py", "host/tools.py"]
 
 
 def main():
