@@ -10,6 +10,13 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.7.1': [
+    'Descarga reels de Facebook e Instagram.',
+    'Quitar silencio del inicio en MP3, en Ajustes.',
+    'Cada descarga muestra el logo de su red.',
+    'Bajar algo dos veces guarda "Nombre (1)".',
+    'La carpeta se abre adelante.',
+  ],
   '1.7.0': [
     'Descarga reels de Facebook e Instagram.',
     'Opción para quitar el silencio del inicio en MP3.',
@@ -75,6 +82,7 @@ function youtubeId(u) {
 }
 
 const FALLBACK_TITLE = { facebook: 'Reel de Facebook', instagram: 'Reel de Instagram' };
+const PLATFORM_NAME = { youtube: 'YouTube', facebook: 'Facebook', instagram: 'Instagram' };
 
 function cleanTitle(t, u) {
   const title = (t || '')
@@ -175,7 +183,17 @@ function row(id, j) {
   }
   const name = el('span', 'name', j.title || j.url);
   name.title = j.state === 'error' ? j.error || '' : j.path || j.title || '';
-  li.append(lead, name, el('span', j.state === 'error' ? 'meta err' : 'meta', metaFor(j)));
+  li.append(lead);
+  const platform = j.platform || platformOf(j.url);
+  if (PLATFORM_NAME[platform]) {
+    const logo = new Image(16, 16);
+    logo.className = 'src';
+    logo.alt = PLATFORM_NAME[platform];
+    logo.title = PLATFORM_NAME[platform];
+    logo.src = `icons/${platform}.png`;
+    li.append(logo);
+  }
+  li.append(name, el('span', j.state === 'error' ? 'meta err' : 'meta', metaFor(j)));
   const acts = el('span', 'acts');
   if (j.state === 'downloading') acts.append(tpl('t-pause'), tpl('t-cancel'));
   if (j.state === 'paused') acts.append(tpl('t-resume'), tpl('t-cancel'));

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -295,8 +296,9 @@ FIND_EXPLORER = r"""
 $p = $env:MPEASY_REVEAL
 $dir = [IO.Path]::GetDirectoryName($p).TrimEnd('\')
 $name = [IO.Path]::GetFileName($p)
+$tries = [Math]::Max(1, [int]$env:MPEASY_TRIES)
 $shell = New-Object -ComObject Shell.Application
-foreach ($attempt in 1..3) {
+foreach ($attempt in 1..$tries) {
   $busy = $false
   foreach ($w in @($shell.Windows())) {
     try { $f = $w.Document.Folder.Self.Path } catch { $busy = $true; continue }
@@ -307,21 +309,22 @@ foreach ($attempt in 1..3) {
       exit 0
     }
   }
-  if (-not $busy) { exit 1 }
+  if ($attempt -eq $tries) { break }
+  if (-not $busy -and $tries -le 3) { break }
   Start-Sleep -Milliseconds 300
 }
 exit 1
 """
 
 
-def open_explorer_window(path):
+def open_explorer_window(path, tries=3):
     try:
         found = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", FIND_EXPLORER],
-            env={**os.environ, "MPEASY_REVEAL": path},
+            env={**os.environ, "MPEASY_REVEAL": path, "MPEASY_TRIES": str(tries)},
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=30,
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -362,10 +365,11 @@ def reveal(path):
         send({"type": "error", "message": "El archivo ya no está en esa carpeta."})
         return
     hwnd = open_explorer_window(path)
+    if not hwnd:
+        subprocess.Popen(["explorer", "/select,", path])
+        hwnd = open_explorer_window(path, tries=17)
     if hwnd:
         focus_window(hwnd)
-    else:
-        subprocess.Popen(["explorer", "/select,", path])
     send({"type": "revealed"})
 
 
@@ -387,7 +391,56 @@ def ensure_tools(control):
         send({"type": "progress", "percent": 0})
 
 
+class TrimFailed(Exception):
+    pass
+
+
+LOCKS = os.path.join(tempfile.gettempdir(), "mpeasy-locks")
+STALE_LOCK = 6 * 3600
+
+
+def outtmpl_for(target, n):
+    suffix = "" if n == 0 else f" ({n})"
+    return os.path.join(target.replace("%", "%%"), "%(title)s" + suffix + ".%(ext)s")
+
+
+def take_lock(candidate):
+    os.makedirs(LOCKS, exist_ok=True)
+    lock = os.path.join(LOCKS, hashlib.sha1(os.path.normcase(candidate).encode("utf-8")).hexdigest())
+    for _ in range(2):
+        try:
+            os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            return lock
+        except FileExistsError:
+            try:
+                if time.time() - os.path.getmtime(lock) < STALE_LOCK:
+                    return None
+                os.remove(lock)
+            except OSError:
+                return None
+    return None
+
+
+def reserve_name(ydl, info, target, final_ext):
+    for n in range(1000):
+        tmpl = outtmpl_for(target, n)
+        base = os.path.splitext(ydl.prepare_filename(info, outtmpl=tmpl))[0]
+        if any(os.path.exists(base + ext) for ext in (final_ext, final_ext + ".part")):
+            continue
+        lock = take_lock(base)
+        if lock:
+            return tmpl, base, lock
+    raise RuntimeError("No se pudo elegir un nombre libre para el archivo.")
+
+
 def download(url, quality, folder, control, trim=False):
+    try:
+        download_once(url, quality, folder, control, trim)
+    except TrimFailed:
+        download_once(url, quality, folder, control, False)
+
+
+def download_once(url, quality, folder, control, trim):
     yt_dlp = load_ytdlp()
     state = {"last": -1.0}
     mp3 = quality.startswith("mp3")
@@ -444,40 +497,51 @@ def download(url, quality, folder, control, trim=False):
     if ff:
         opts["ffmpeg_location"] = ff
 
-    last = None
-    for clients in CLIENTS:
-        run = dict(opts)
-        if clients:
-            run["extractor_args"] = {"youtube": {"player_client": clients}}
-            run["continuedl"] = False
-        try:
-            with yt_dlp.YoutubeDL(run) as ydl:
-                info = ydl.extract_info(url, download=False)
-                control.checkpoint()
-                formats = info.get("formats") or []
-                if mp3 and formats and all(f.get("acodec") == "none" for f in formats):
-                    raise RuntimeError(NO_AUDIO)
-                send({"type": "info", "title": nice_title(info, url)})
-                base = os.path.splitext(ydl.prepare_filename(info))[0]
-                created.update(base + ext for ext in (".webp", ".jpg", ".png", ".mp3", ".mp4", ".m4a", ".webm", ".temp.mp4"))
-                ydl.process_ie_result(info, download=True)
-                path = info.get("requested_downloads", [{}])[0].get("filepath") or ydl.prepare_filename(info)
-                if mp3:
-                    path = os.path.splitext(path)[0] + ".mp3"
-                send({"type": "done", "file": os.path.basename(path), "path": path})
-                return
-        except Cancelled:
-            remove_created(created, started)
-            raise
-        except yt_dlp.utils.DownloadError as e:
-            last = e
-            if trim and "Postprocessing" in str(e):
+    reserved = None
+    try:
+        last = None
+        for clients in CLIENTS:
+            run = dict(opts)
+            if clients:
+                run["extractor_args"] = {"youtube": {"player_client": clients}}
+                run["continuedl"] = False
+            try:
+                with yt_dlp.YoutubeDL(run) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    control.checkpoint()
+                    formats = info.get("formats") or []
+                    if mp3 and formats and all(f.get("acodec") == "none" for f in formats):
+                        raise RuntimeError(NO_AUDIO)
+                    send({"type": "info", "title": nice_title(info, url)})
+                    if reserved is None:
+                        reserved = reserve_name(ydl, info, target, ".mp3" if mp3 else ".mp4")
+                    tmpl, base, _ = reserved
+                    ydl.params["outtmpl"]["default"] = tmpl
+                    created.update(base + ext for ext in (".webp", ".jpg", ".png", ".mp3", ".mp4", ".m4a", ".webm", ".temp.mp4"))
+                    ydl.process_ie_result(info, download=True)
+                    path = info.get("requested_downloads", [{}])[0].get("filepath") or ydl.prepare_filename(info)
+                    if mp3:
+                        path = os.path.splitext(path)[0] + ".mp3"
+                    send({"type": "done", "file": os.path.basename(path), "path": path})
+                    return
+            except Cancelled:
                 remove_created(created, started)
-                return download(url, quality, folder, control, False)
-            if "403" not in str(e):
                 raise
-            send({"type": "progress", "percent": 0})
-    raise last
+            except yt_dlp.utils.DownloadError as e:
+                last = e
+                if trim and "Postprocessing" in str(e):
+                    remove_created(created, started)
+                    raise TrimFailed()
+                if "403" not in str(e):
+                    raise
+                send({"type": "progress", "percent": 0})
+        raise last
+    finally:
+        if reserved:
+            try:
+                os.remove(reserved[2])
+            except OSError:
+                pass
 
 
 def main():

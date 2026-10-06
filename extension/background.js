@@ -155,6 +155,7 @@ async function queue(url, title, mode) {
     url,
     title: title || url,
     mode,
+    platform: platformOf(url),
     quality: audio ? `mp3-${kbps}` : height,
     meta: audio ? `MP3 · ${kbps}` : height === 'best' ? 'Máxima' : `${height}p`,
     folder: (audio ? s.folderMp3 : s.folderMp4) ?? s.folder ?? '',
@@ -170,7 +171,7 @@ async function retry(id) {
       delete jobs[id];
     }
   });
-  if (job) run({ url: job.url, title: job.title, mode: job.mode, quality: job.quality, meta: job.meta, folder: job.folder, trim: job.trim });
+  if (job) run({ url: job.url, title: job.title, mode: job.mode, platform: job.platform, quality: job.quality, meta: job.meta, folder: job.folder, trim: job.trim });
 }
 
 function ask(message, onReply) {
