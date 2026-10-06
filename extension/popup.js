@@ -10,6 +10,13 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.7.3': [
+    'Menú de calidad con estilo propio.',
+    'Botón Donar con los datos y los últimos donadores.',
+    'Modo claro con cortinas rojas, en Ajustes.',
+    'Descarga reels de Facebook e Instagram.',
+    'Quitar silencio del inicio en MP3.',
+  ],
   '1.7.2': [
     'Modo claro: elígelo en Ajustes, Preferencias.',
     'Descarga reels de Facebook e Instagram.',
@@ -40,8 +47,13 @@ const CHANGES = {
 };
 
 const segEl = document.getElementById('seg');
-const qualityEl = document.getElementById('quality');
+const qualityBtnEl = document.getElementById('qualityBtn');
+const qualityMenuEl = document.getElementById('qualityMenu');
 const qualityLabelEl = document.getElementById('qualityLabel');
+const donateEl = document.getElementById('donate');
+const openDonateEl = document.getElementById('openDonate');
+const DONATE_ACCOUNT = '24344913';
+const DONORS = [{ name: 'Facundo J', flag: 'ar' }];
 const goEl = document.getElementById('go');
 const noticeEls = document.querySelectorAll('.notice');
 const mainEl = document.getElementById('main');
@@ -123,18 +135,74 @@ function paintMode() {
   const mode = state.mode;
   segEl.dataset.mode = mode;
   segEl.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === mode)));
-  qualityEl.replaceChildren(...QUALITY[mode].map(([v, label]) => {
-    const o = el('option', null, label);
-    o.value = v;
-    return o;
+  closeMenu(false);
+  qualityMenuEl.replaceChildren(...QUALITY[mode].map(([v, label]) => {
+    const li = el('li', 'opt');
+    li.id = `q-${mode}-${v}`;
+    li.setAttribute('role', 'option');
+    li.dataset.value = v;
+    li.append(el('span', null, label), tpl('t-check'));
+    return li;
   }));
-  qualityEl.value = state[QKEY[mode]];
-  if (qualityEl.selectedIndex < 0) qualityEl.value = DEFAULT[mode];
   paintQuality();
 }
 
+function currentQuality() {
+  const value = state[QKEY[state.mode]];
+  return QUALITY[state.mode].some(([v]) => v === value) ? value : DEFAULT[state.mode];
+}
+
 function paintQuality() {
-  qualityLabelEl.textContent = qualityEl.options[qualityEl.selectedIndex]?.textContent || '';
+  const value = currentQuality();
+  qualityLabelEl.textContent = QUALITY[state.mode].find(([v]) => v === value)[1];
+  qualityMenuEl.querySelectorAll('.opt').forEach((o) => o.setAttribute('aria-selected', String(o.dataset.value === value)));
+}
+
+let menuIndex = 0;
+
+function menuOptions() {
+  return [...qualityMenuEl.querySelectorAll('.opt')];
+}
+
+function highlight(i) {
+  const opts = menuOptions();
+  if (!opts.length) return;
+  menuIndex = (i + opts.length) % opts.length;
+  opts.forEach((o, n) => o.classList.toggle('active', n === menuIndex));
+  qualityMenuEl.setAttribute('aria-activedescendant', opts[menuIndex].id);
+}
+
+function openMenu() {
+  if (!qualityMenuEl.hidden) return;
+  qualityMenuEl.hidden = false;
+  qualityBtnEl.setAttribute('aria-expanded', 'true');
+  highlight(Math.max(0, menuOptions().findIndex((o) => o.dataset.value === currentQuality())));
+  qualityMenuEl.focus({ preventScroll: true });
+  if (qualityMenuEl.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    qualityMenuEl.animate([{ opacity: 0, transform: 'translateY(-4px) scale(.97)' }, { opacity: 1, transform: 'none' }], { duration: 170, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
+  }
+}
+
+function closeMenu(focusButton) {
+  if (qualityMenuEl.hidden) return;
+  qualityMenuEl.hidden = true;
+  qualityBtnEl.setAttribute('aria-expanded', 'false');
+  if (focusButton) qualityBtnEl.focus({ preventScroll: true });
+}
+
+function choose(value) {
+  save({ [QKEY[state.mode]]: value });
+  paintQuality();
+  closeMenu(true);
+}
+
+function paintDonors() {
+  document.getElementById('donors').replaceChildren(...DONORS.map((d) => {
+    const li = el('li', 'row donor');
+    if (document.getElementById(`flag-${d.flag}`)) li.append(tpl(`flag-${d.flag}`));
+    li.append(el('span', 'k', d.name));
+    return li;
+  }));
 }
 
 const themeSegEl = document.getElementById('themeSeg');
@@ -206,15 +274,17 @@ function showNotice(text) {
   });
 }
 
+const views = { main: mainEl, settings: settingsEl, donate: donateEl };
+let opener = openSettingsEl;
+
 function show(view) {
-  const settings = view === 'settings';
-  mainEl.hidden = settings;
-  settingsEl.hidden = !settings;
-  const shown = settings ? settingsEl : mainEl;
+  closeMenu(false);
+  for (const [name, node] of Object.entries(views)) node.hidden = name !== view;
+  const shown = views[view];
   shown.classList.remove('in-right', 'in-left');
   void shown.offsetWidth;
-  shown.classList.add(settings ? 'in-right' : 'in-left');
-  (settings ? closeSettingsEl : openSettingsEl).focus({ preventScroll: true });
+  shown.classList.add(view === 'main' ? 'in-left' : 'in-right');
+  (view === 'main' ? opener : shown.querySelector('.back')).focus({ preventScroll: true });
 }
 
 function metaFor(j) {
@@ -401,10 +471,66 @@ document.getElementById('trimRow').addEventListener('click', () => {
   paintTrim();
 });
 
-openSettingsEl.addEventListener('click', () => show('settings'));
+openSettingsEl.addEventListener('click', () => {
+  opener = openSettingsEl;
+  show('settings');
+});
 closeSettingsEl.addEventListener('click', () => show('main'));
+openDonateEl.addEventListener('click', () => {
+  opener = openDonateEl;
+  show(donateEl.hidden ? 'donate' : 'main');
+});
+document.getElementById('closeDonate').addEventListener('click', () => show('main'));
+
+document.getElementById('copyAccount').addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  try {
+    await navigator.clipboard.writeText(DONATE_ACCOUNT);
+    button.textContent = 'Copiado';
+  } catch {
+    button.textContent = 'No se pudo';
+  }
+  setTimeout(() => {
+    button.textContent = 'Copiar';
+  }, 1600);
+});
+
+qualityBtnEl.addEventListener('click', () => (qualityMenuEl.hidden ? openMenu() : closeMenu(true)));
+qualityBtnEl.addEventListener('keydown', (e) => {
+  if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) {
+    e.preventDefault();
+    openMenu();
+  }
+});
+qualityMenuEl.addEventListener('keydown', (e) => {
+  const keys = { ArrowDown: () => highlight(menuIndex + 1), ArrowUp: () => highlight(menuIndex - 1), Home: () => highlight(0), End: () => highlight(menuOptions().length - 1) };
+  if (keys[e.key]) {
+    e.preventDefault();
+    keys[e.key]();
+  } else if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    choose(menuOptions()[menuIndex].dataset.value);
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    closeMenu(true);
+  } else if (e.key === 'Tab') {
+    closeMenu(false);
+  }
+});
+qualityMenuEl.addEventListener('pointermove', (e) => {
+  const o = e.target.closest('.opt');
+  if (o) highlight(menuOptions().indexOf(o));
+});
+qualityMenuEl.addEventListener('click', (e) => {
+  const o = e.target.closest('.opt');
+  if (o) choose(o.dataset.value);
+});
+document.addEventListener('pointerdown', (e) => {
+  if (!qualityMenuEl.hidden && !e.target.closest('.qwrap')) closeMenu(false);
+});
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !recording && !settingsEl.hidden) {
+  if (e.key === 'Escape' && !recording && mainEl.hidden) {
     e.preventDefault();
     show('main');
   }
@@ -417,10 +543,6 @@ segEl.addEventListener('click', (e) => {
   paintMode();
 });
 
-qualityEl.addEventListener('change', () => {
-  paintQuality();
-  save({ [QKEY[state.mode]]: qualityEl.value });
-});
 
 for (const [key, input] of Object.entries(folderEls)) {
   input.addEventListener('input', () => {
@@ -443,7 +565,7 @@ document.querySelectorAll('.pick').forEach((b) => {
 goEl.addEventListener('click', async () => {
   if (!tab) return;
   hostNotice = '';
-  await save({ [QKEY[state.mode]]: qualityEl.value, notice: '' });
+  await save({ [QKEY[state.mode]]: currentQuality(), notice: '' });
   chrome.runtime.sendMessage({ type: 'download', url: tab.url, title: cleanTitle(tab.title, tab.url), mode: state.mode });
 });
 
@@ -514,6 +636,7 @@ chrome.storage.local.get(null).then((data) => {
   paintFolders();
   paintTrim();
   paintTheme();
+  paintDonors();
   hostNotice = merged.notice || '';
   render(merged.jobs || {});
   paintUpdate(merged.update);

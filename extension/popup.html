@@ -23,6 +23,9 @@
     --glyph: #000000;
     --scroll: #48484a;
     --pill-shadow: 0 3px 8px rgba(0,0,0,.5), 0 1px 1px rgba(0,0,0,.3);
+    --menu-bg: #2c2c2e;
+    --menu-hover: #3a3a3c;
+    --menu-shadow: 0 12px 32px rgba(0,0,0,.7), 0 0 0 .5px rgba(255,255,255,.08);
     color-scheme: dark;
   }
   :root[data-theme="light"] {
@@ -41,6 +44,9 @@
     --glyph: #ffffff;
     --scroll: #c7c7cc;
     --pill-shadow: 0 3px 8px rgba(0,0,0,.12), 0 1px 1px rgba(0,0,0,.04);
+    --menu-bg: #ffffff;
+    --menu-hover: #f2f2f7;
+    --menu-shadow: 0 12px 32px rgba(0,0,0,.16), 0 0 0 .5px rgba(0,0,0,.08);
     color-scheme: light;
   }
   * { box-sizing: border-box; }
@@ -95,11 +101,25 @@
   .row .k { flex: none; }
   .row .v { flex: 1; min-width: 0; text-align: right; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chev { flex: none; color: var(--secondary); opacity: .7; }
-  .row select.overlay {
-    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0 12px;
-    opacity: 0; border: 0; cursor: pointer; font: inherit; text-align: left;
+  .qwrap { position: relative; }
+  .qrow { cursor: pointer; }
+  .qrow:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent); border-radius: 10px; }
+  .qrow[aria-expanded="true"] .chev { color: var(--accent); opacity: 1; }
+  .menu {
+    position: absolute; z-index: 20; top: calc(100% + 6px); right: 0; width: 188px; margin: 0; padding: 4px;
+    list-style: none; border-radius: 12px; background: var(--menu-bg); box-shadow: var(--menu-shadow);
+    transform-origin: top right; outline: none;
   }
-  .row:has(select:focus-visible) { box-shadow: inset 0 0 0 2px var(--accent); border-radius: 10px; }
+  .opt {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 34px; padding: 0 10px;
+    border-radius: 8px; cursor: pointer; font-variant-numeric: tabular-nums;
+  }
+  .opt.active { background: var(--menu-hover); }
+  .opt[aria-selected="true"] { font-weight: 600; }
+  .opt .check { flex: none; color: var(--accent); opacity: 0; }
+  .opt[aria-selected="true"] .check { opacity: 1; }
+  .opt[aria-selected="true"] .check path { stroke-dasharray: 14; animation: draw .22s cubic-bezier(.23,1,.32,1); }
+  @keyframes draw { from { stroke-dashoffset: 14; } }
   .row input {
     flex: 1; min-width: 0; border: 0; background: transparent; color: var(--label); font: inherit;
     text-align: right; height: 44px; padding: 0; outline: none; text-overflow: ellipsis; caret-color: var(--accent);
@@ -228,7 +248,23 @@
   .bar + .sec { margin-top: 8px; }
 
   .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; min-height: 32px; }
-  .brand { color: var(--secondary); font-size: 11px; font-weight: 600; letter-spacing: .01em; }
+  .donate {
+    display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px 0 10px; margin-left: -2px;
+    border: 1.5px solid transparent; border-radius: 15px; cursor: pointer; color: var(--label); font-size: 12px; font-weight: 600;
+    background: linear-gradient(var(--bg), var(--bg)) padding-box, linear-gradient(90deg, #ff2d55, #ff9f0a, #ffd60a, #30d158, #0a84ff, #bf5af2, #ff2d55) border-box;
+    background-size: 100% 100%, 200px 100%;
+    animation: rgb 9s linear infinite;
+    transition: transform .16s cubic-bezier(.23,1,.32,1);
+  }
+  .donate:active { transform: scale(.97); }
+  .donate .heart { display: block; color: #ff2d55; transform-origin: 50% 55%; animation: beat 2.6s ease-in-out infinite; }
+  @keyframes rgb { to { background-position: 0 0, 200px 0; } }
+  @keyframes beat { 0%, 64%, 100% { transform: scale(1); } 72% { transform: scale(1.2); } 80% { transform: scale(1); } 88% { transform: scale(1.12); } }
+  .lead { margin: 2px 0 0; color: var(--secondary); font-size: 12px; }
+  .v.strong { color: var(--label); font-weight: 600; user-select: all; font-variant-numeric: tabular-nums; }
+  .copy { margin-left: 4px; font-size: 12px; }
+  .donors { list-style: none; margin: 0; padding: 0; }
+  .donor .flag { flex: none; display: block; border-radius: 2px; box-shadow: 0 0 0 .5px var(--separator); }
   .gh { display: grid; place-items: center; width: 32px; height: 32px; margin-right: -7px; border-radius: 8px; opacity: .75; transition: opacity .15s; }
   .gh:hover, .gh:focus-visible { opacity: 1; }
   .gh img { width: 18px; height: 18px; display: block; }
@@ -278,13 +314,15 @@
       <button type="button" role="tab" aria-selected="false" data-mode="audio">Audio</button>
     </div>
 
-    <div class="group">
-      <label class="row">
-        <span class="k">Calidad</span>
-        <span class="v" id="qualityLabel" aria-hidden="true"></span>
-        <select id="quality" class="overlay" aria-label="Calidad"></select>
-        <svg class="chev" width="8" height="12" viewBox="0 0 8 12" aria-hidden="true"><path d="M1.5 4 4 1.5 6.5 4M1.5 8 4 10.5 6.5 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </label>
+    <div class="qwrap">
+      <div class="group">
+        <button type="button" class="row qrow" id="qualityBtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="qualityMenu">
+          <span class="k">Calidad</span>
+          <span class="v" id="qualityLabel"></span>
+          <svg class="chev" width="8" height="12" viewBox="0 0 8 12" aria-hidden="true"><path d="M1.5 4 4 1.5 6.5 4M1.5 8 4 10.5 6.5 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <ul class="menu" id="qualityMenu" role="listbox" aria-label="Calidad" tabindex="-1" hidden></ul>
     </div>
 
     <button type="button" class="go" id="go">
@@ -361,8 +399,32 @@
     <p class="notice" hidden></p>
   </div>
 
+  <div class="view" id="donate" hidden>
+    <header class="bar">
+      <button type="button" class="back" id="closeDonate"><svg width="9" height="15" viewBox="0 0 9 15" aria-hidden="true"><path d="M7.5 1.5 1.5 7.5l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Atrás</button>
+      <h1>Donar</h1>
+    </header>
+    <p class="lead">Si mpeasy te sirve, puedes apoyarlo con una transferencia.</p>
+
+    <h2 class="sec">Datos</h2>
+    <div class="group">
+      <div class="row">
+        <span class="k">Cuenta Prex</span>
+        <span class="v strong" id="account">24344913</span>
+        <button type="button" class="rowlink copy" id="copyAccount">Copiar</button>
+      </div>
+      <div class="row">
+        <span class="k">Nombre</span>
+        <span class="v strong">Luciano Herrera</span>
+      </div>
+    </div>
+
+    <h2 class="sec">Últimos donadores</h2>
+    <ul class="group donors" id="donors"></ul>
+  </div>
+
   <footer class="foot">
-    <span class="brand">mpeasy</span>
+    <button type="button" class="donate" id="openDonate"><svg class="heart" width="13" height="13" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14s-5.6-3.5-5.6-7.4A3.1 3.1 0 0 1 8 4.7a3.1 3.1 0 0 1 5.6 1.9C13.6 10.5 8 14 8 14z" fill="currentColor"/></svg>Donar</button>
     <a class="gh" href="https://github.com/UiUyHerrera/yt-mp4" target="_blank" rel="noopener noreferrer" aria-label="mpeasy en GitHub" title="mpeasy en GitHub"><img src="icons/github.png" alt="" width="18" height="18"></a>
   </footer>
 
@@ -375,6 +437,9 @@
   <template id="t-pause"><button class="act" type="button" data-act="pause" aria-label="Pausar" title="Pausar"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/><rect x="9.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/></svg></button></template>
   <template id="t-resume"><button class="act" type="button" data-act="resume" aria-label="Reanudar" title="Reanudar"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.8v10.4c0 .6.66.97 1.17.65l8.2-5.2a.77.77 0 0 0 0-1.3l-8.2-5.2a.77.77 0 0 0-1.17.65z" fill="currentColor"/></svg></button></template>
   <template id="t-cancel"><button class="act" type="button" data-act="cancel" aria-label="Cancelar descarga" title="Cancelar"><svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="m2 2 8 8M10 2l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></template>
+
+  <template id="t-check"><svg class="check" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="m2.5 7.5 3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></template>
+  <template id="flag-ar"><svg class="flag" width="20" height="14" viewBox="0 0 20 14" role="img" aria-label="Argentina"><rect width="20" height="14" rx="2" fill="#74acdf"/><rect y="4.67" width="20" height="4.66" fill="#ffffff"/><circle cx="10" cy="7" r="1.6" fill="#f6b40e"/></svg></template>
 
   <div class="curtain l" aria-hidden="true"></div>
   <div class="curtain r" aria-hidden="true"></div>
