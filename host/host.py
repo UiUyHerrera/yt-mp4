@@ -215,7 +215,9 @@ def ping():
 
 
 SILENCE_FILTER = "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05:detection=peak"
-FACEBOOK_STATS = re.compile(r"^[\d.,]+\s*[KMB]?\s+(views|reproducciones)\b[^|]*\|\s*", re.I)
+FACEBOOK_STATS = re.compile(r"^[^|]*\b(views|reactions|shares|comments|reproducciones|visualizaciones|reacciones|compartidos|comentarios|veces compartido)\b[^|]*\|\s*", re.I)
+MAX_PATH_UNITS = 238
+RESERVED_UNITS = 22
 LOGIN_WALL = re.compile(r"login required|log ?in|logged.in|rate.?limit|not available|private|empty media|Cannot parse data", re.I)
 NO_AUDIO = "Este video no tiene sonido, así que no se puede bajar como MP3."
 
@@ -229,9 +231,25 @@ def format_options(quality, mp3):
 
 
 def nice_title(info, url):
-    title = (info.get("title") or "").strip()
+    title = re.sub(r"\s+", " ", info.get("title") or "").strip()
     title = FACEBOOK_STATS.sub("", title).strip()
     return title or info.get("id") or url
+
+
+def path_units(text):
+    return len(text.encode("utf-16-le")) // 2
+
+
+def short_title(title, target):
+    limit = max(20, min(120, MAX_PATH_UNITS - RESERVED_UNITS - path_units(target)))
+    if path_units(title) <= limit:
+        return title
+    cut = title
+    while path_units(cut) > limit:
+        cut = cut[:-1]
+    if " " in cut[len(cut) // 2:]:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(" -|·,.;:") or cut
 
 
 def friendly_error(text, url):
@@ -242,6 +260,8 @@ def friendly_error(text, url):
         return f"{site} no dejó bajar este video: puede ser privado o pide iniciar sesión. Si es público, prueba de nuevo en un rato."
     if site and "no video" in text.lower():
         return f"Esta publicación de {site} no tiene video."
+    if "No such file or directory" in text or "WinError 206" in text:
+        return "No se pudo guardar el archivo en esa carpeta. Si la ruta es muy larga, elige una carpeta más corta en Ajustes."
     return text
 
 
@@ -512,7 +532,8 @@ def download_once(url, quality, folder, control, trim):
                     formats = info.get("formats") or []
                     if mp3 and formats and all(f.get("acodec") == "none" for f in formats):
                         raise RuntimeError(NO_AUDIO)
-                    send({"type": "info", "title": nice_title(info, url)})
+                    info["title"] = short_title(nice_title(info, url), target)
+                    send({"type": "info", "title": info["title"]})
                     if reserved is None:
                         reserved = reserve_name(ydl, info, target, ".mp3" if mp3 else ".mp4")
                     tmpl, base, _ = reserved

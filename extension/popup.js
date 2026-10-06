@@ -10,6 +10,13 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.7.2': [
+    'Modo claro: elígelo en Ajustes, Preferencias.',
+    'Descarga reels de Facebook e Instagram.',
+    'Quitar silencio del inicio en MP3.',
+    'Cada descarga muestra el logo de su red.',
+    'Arreglado: reels de Facebook con títulos muy largos.',
+  ],
   '1.7.1': [
     'Descarga reels de Facebook e Instagram.',
     'Quitar silencio del inicio en MP3, en Ajustes.',
@@ -130,6 +137,57 @@ function paintQuality() {
   qualityLabelEl.textContent = qualityEl.options[qualityEl.selectedIndex]?.textContent || '';
 }
 
+const themeSegEl = document.getElementById('themeSeg');
+let theming = false;
+
+function currentTheme() {
+  return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+}
+
+function paintTheme() {
+  const theme = currentTheme();
+  themeSegEl.dataset.mode = theme;
+  themeSegEl.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.themeChoice === theme)));
+}
+
+function setTheme(theme) {
+  if (theme === 'light') document.documentElement.dataset.theme = 'light';
+  else delete document.documentElement.dataset.theme;
+  try {
+    localStorage.setItem('mpeasy-theme', theme);
+  } catch {}
+  paintTheme();
+}
+
+async function switchTheme(theme) {
+  if (theming || theme === currentTheme()) return;
+  const curtains = [...document.querySelectorAll('.curtain')];
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || !curtains[0].animate) {
+    setTheme(theme);
+    return;
+  }
+  theming = true;
+  themeSegEl.dataset.mode = theme;
+  const away = (i) => `translateX(${i ? 100 : -100}%)`;
+  curtains.forEach((c) => {
+    c.style.visibility = 'visible';
+  });
+  const settle = (animations, ms) => Promise.race([Promise.all(animations.map((a) => a.finished)), new Promise((r) => setTimeout(r, ms))]);
+  try {
+    await settle(curtains.map((c, i) => c.animate([{ transform: away(i) }, { transform: 'translateX(0)' }], { duration: 260, easing: 'cubic-bezier(0.77, 0, 0.175, 1)', fill: 'forwards' })), 800);
+    setTheme(theme);
+    await new Promise((r) => setTimeout(r, 40));
+    await settle(curtains.map((c, i) => c.animate([{ transform: 'translateX(0)' }, { transform: away(i) }], { duration: 340, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'forwards' })), 900);
+  } finally {
+    curtains.forEach((c) => {
+      c.style.visibility = 'hidden';
+      c.getAnimations().forEach((a) => a.cancel());
+    });
+    if (currentTheme() !== theme) setTheme(theme);
+    theming = false;
+  }
+}
+
 function paintTrim() {
   document.getElementById('trimSilence').setAttribute('aria-checked', String(!!state.trimSilence));
 }
@@ -232,7 +290,7 @@ function liveUpdateState(u) {
 function paintUpdate(u) {
   document.getElementById('version').textContent = `Versión ${VERSION}`;
   const state = liveUpdateState(u);
-  document.getElementById('updateHint').textContent = state ? UPDATE_TEXT[state](u) : 'Se revisa sola al abrir mpeasy y cada 6 horas.';
+  document.getElementById('updateHint').textContent = state ? UPDATE_TEXT[state](u) : '';
   document.getElementById('checkUpdate').disabled = state === 'checking' || state === 'downloading';
   const downloading = state === 'downloading';
   bannerEl.hidden = !downloading;
@@ -262,7 +320,7 @@ async function paintKeys() {
   });
   document.getElementById('keysHint').textContent = FIREFOX
     ? 'Toca un atajo y presiona la combinación nueva. Esc cancela.'
-    : 'Toca un atajo para cambiarlo.';
+    : '';
 }
 
 function shortcutsPage() {
@@ -331,6 +389,11 @@ document.getElementById('closeNews').addEventListener('click', () => {
   chrome.storage.local.set({ seenVersion: VERSION });
   paintNews(false);
   goEl.focus({ preventScroll: true });
+});
+
+themeSegEl.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b) switchTheme(b.dataset.themeChoice);
 });
 
 document.getElementById('trimRow').addEventListener('click', () => {
@@ -450,6 +513,7 @@ chrome.storage.local.get(null).then((data) => {
   paintMode();
   paintFolders();
   paintTrim();
+  paintTheme();
   hostNotice = merged.notice || '';
   render(merged.jobs || {});
   paintUpdate(merged.update);
