@@ -213,16 +213,35 @@ def ping():
         raise RuntimeError(MISSING)
 
 
-def fmt(quality):
+SILENCE_FILTER = "silenceremove=start_periods=1:start_threshold=-50dB:start_silence=0.05:detection=peak"
+FACEBOOK_STATS = re.compile(r"^[\d.,]+\s*[KMB]?\s+(views|reproducciones)\b[^|]*\|\s*", re.I)
+LOGIN_WALL = re.compile(r"login required|log ?in|logged.in|rate.?limit|not available|private|empty media|Cannot parse data", re.I)
+NO_AUDIO = "Este video no tiene sonido, así que no se puede bajar como MP3."
+
+
+def format_options(quality, mp3):
+    if mp3:
+        return {"format": "ba/b"}
     if quality == "best":
-        return "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b"
-    h = f"[height<={int(quality)}]"
-    return (
-        f"bv*{h}[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/"
-        f"bv*{h}[ext=mp4]+ba[ext=m4a]/"
-        f"b{h}[ext=mp4]/"
-        f"bv*{h}+ba/b{h}"
-    )
+        return {"format": "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b"}
+    return {"format": "bv*[vcodec!^=av01]+ba/bv*+ba/b", "format_sort": [f"res:{int(quality)}", "vcodec:h264", "acodec:aac"]}
+
+
+def nice_title(info, url):
+    title = (info.get("title") or "").strip()
+    title = FACEBOOK_STATS.sub("", title).strip()
+    return title or info.get("id") or url
+
+
+def friendly_error(text, url):
+    if "403" in text:
+        return "YouTube bloqueó la descarga (403). Actualiza yt-dlp o intenta de nuevo en un rato."
+    site = "Instagram" if "instagram.com" in url else "Facebook" if ("facebook.com" in url or "fb.watch" in url) else None
+    if site and LOGIN_WALL.search(text):
+        return f"{site} no dejó bajar este video: puede ser privado o pide iniciar sesión. Si es público, prueba de nuevo en un rato."
+    if site and "no video" in text.lower():
+        return f"Esta publicación de {site} no tiene video."
+    return text
 
 
 def default_folder():
@@ -249,11 +268,8 @@ def bring_to_front(root):
 
     user32 = ctypes.windll.user32
     hwnd = user32.GetParent(root.winfo_id()) or root.winfo_id()
-    user32.keybd_event(0x12, 0, 0, 0)
-    user32.keybd_event(0x12, 0, 2, 0)
     user32.ShowWindow(hwnd, 5)
-    user32.BringWindowToTop(hwnd)
-    user32.SetForegroundWindow(hwnd)
+    focus_window(hwnd)
     root.focus_force()
     root.update()
 
@@ -275,12 +291,81 @@ def pick_folder(current, title):
     send({"type": "folder", "path": os.path.normpath(path) if path else ""})
 
 
+FIND_EXPLORER = r"""
+$p = $env:MPEASY_REVEAL
+$dir = [IO.Path]::GetDirectoryName($p).TrimEnd('\')
+$name = [IO.Path]::GetFileName($p)
+$shell = New-Object -ComObject Shell.Application
+foreach ($attempt in 1..3) {
+  $busy = $false
+  foreach ($w in @($shell.Windows())) {
+    try { $f = $w.Document.Folder.Self.Path } catch { $busy = $true; continue }
+    if ($f -and $f.TrimEnd('\') -ieq $dir) {
+      $item = $w.Document.Folder.ParseName($name)
+      if ($item) { $w.Document.SelectItem($item, 29) }
+      [Console]::Out.Write($w.HWND)
+      exit 0
+    }
+  }
+  if (-not $busy) { exit 1 }
+  Start-Sleep -Milliseconds 300
+}
+exit 1
+"""
+
+
+def open_explorer_window(path):
+    try:
+        found = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", FIND_EXPLORER],
+            env={**os.environ, "MPEASY_REVEAL": path},
+            capture_output=True,
+            text=True,
+            timeout=15,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if found.returncode != 0 or not found.stdout.strip().isdigit():
+        return None
+    return int(found.stdout.strip())
+
+
+def focus_window(hwnd):
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.c_void_p]
+    user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+    user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+    user32.SwitchToThisWindow.argtypes = [wintypes.HWND, wintypes.BOOL]
+    for name in ("IsIconic", "BringWindowToTop", "SetForegroundWindow"):
+        getattr(user32, name).argtypes = [wintypes.HWND]
+    current = ctypes.windll.kernel32.GetCurrentThreadId()
+    owner = user32.GetWindowThreadProcessId(user32.GetForegroundWindow(), None)
+    attached = bool(owner) and owner != current and user32.AttachThreadInput(current, owner, True)
+    if user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, 9)
+    user32.BringWindowToTop(hwnd)
+    user32.SetForegroundWindow(hwnd)
+    if attached:
+        user32.AttachThreadInput(current, owner, False)
+    if user32.GetForegroundWindow() != hwnd:
+        user32.SwitchToThisWindow(hwnd, True)
+
+
 def reveal(path):
     path = os.path.normpath(path or "")
     if not path or not os.path.isfile(path):
         send({"type": "error", "message": "El archivo ya no está en esa carpeta."})
         return
-    subprocess.Popen(["explorer", "/select,", path])
+    hwnd = open_explorer_window(path)
+    if hwnd:
+        focus_window(hwnd)
+    else:
+        subprocess.Popen(["explorer", "/select,", path])
     send({"type": "revealed"})
 
 
@@ -302,7 +387,7 @@ def ensure_tools(control):
         send({"type": "progress", "percent": 0})
 
 
-def download(url, quality, folder, control):
+def download(url, quality, folder, control, trim=False):
     yt_dlp = load_ytdlp()
     state = {"last": -1.0}
     mp3 = quality.startswith("mp3")
@@ -329,7 +414,7 @@ def download(url, quality, folder, control):
         control.checkpoint()
 
     opts = {
-        "format": "ba/b" if mp3 else fmt(quality),
+        **format_options(quality, mp3),
         "merge_output_format": "mp4",
         "outtmpl": os.path.join(target, "%(title)s.%(ext)s"),
         "noplaylist": True,
@@ -353,6 +438,8 @@ def download(url, quality, folder, control):
             {"key": "FFmpegMetadata"},
             {"key": "EmbedThumbnail"},
         ]
+        if trim:
+            opts["postprocessor_args"] = {"extractaudio": ["-af", SILENCE_FILTER]}
     ff = tools.ffmpeg_dir()
     if ff:
         opts["ffmpeg_location"] = ff
@@ -367,7 +454,10 @@ def download(url, quality, folder, control):
             with yt_dlp.YoutubeDL(run) as ydl:
                 info = ydl.extract_info(url, download=False)
                 control.checkpoint()
-                send({"type": "info", "title": info.get("title", url)})
+                formats = info.get("formats") or []
+                if mp3 and formats and all(f.get("acodec") == "none" for f in formats):
+                    raise RuntimeError(NO_AUDIO)
+                send({"type": "info", "title": nice_title(info, url)})
                 base = os.path.splitext(ydl.prepare_filename(info))[0]
                 created.update(base + ext for ext in (".webp", ".jpg", ".png", ".mp3", ".mp4", ".m4a", ".webm", ".temp.mp4"))
                 ydl.process_ie_result(info, download=True)
@@ -381,6 +471,9 @@ def download(url, quality, folder, control):
             raise
         except yt_dlp.utils.DownloadError as e:
             last = e
+            if trim and "Postprocessing" in str(e):
+                remove_created(created, started)
+                return download(url, quality, folder, control, False)
             if "403" not in str(e):
                 raise
             send({"type": "progress", "percent": 0})
@@ -415,14 +508,12 @@ def main():
         quality = msg.get("quality", "720")
         if quality == "mp3":
             quality = "mp3-320"
-        download(msg["url"], quality, msg.get("folder"), control)
+        download(msg["url"], quality, msg.get("folder"), control, bool(msg.get("trim")))
     except Cancelled:
         send({"type": "cancelled"})
     except Exception as e:
-        msg = ANSI.sub("", str(e)).replace("ERROR: ", "")
-        if "403" in msg:
-            msg = "YouTube bloqueó la descarga (403). Actualiza yt-dlp o intenta de nuevo en un rato."
-        send({"type": "error", "message": msg[:300]})
+        text = ANSI.sub("", str(e)).replace("ERROR: ", "")
+        send({"type": "error", "message": friendly_error(text, msg.get("url", ""))[:300]})
 
 
 if __name__ == "__main__":

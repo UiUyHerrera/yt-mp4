@@ -10,6 +10,12 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.7.0': [
+    'Descarga reels de Facebook e Instagram.',
+    'Opción para quitar el silencio del inicio en MP3.',
+    'Shorts y reels se bajan en la calidad elegida.',
+    'La carpeta se abre en la misma ventana.',
+  ],
   '1.6.0': [
     'Nuevo nombre y logo: mpeasy.',
     'Pausa, reanuda o cancela cada descarga.',
@@ -36,24 +42,50 @@ const thumbEl = document.getElementById('thumb');
 const bannerEl = document.getElementById('updateBanner');
 const newsEl = document.getElementById('whatsNew');
 
-const state = { mode: 'video', qualityVideo: DEFAULT.video, qualityAudio: DEFAULT.audio, folderMp4: '', folderMp3: '' };
+const state = { mode: 'video', qualityVideo: DEFAULT.video, qualityAudio: DEFAULT.audio, folderMp4: '', folderMp3: '', trimSilence: false };
 let tab = null;
 let recording = null;
 let hostNotice = '';
 
-function videoId(u) {
+function platformOf(u) {
+  try {
+    const x = new URL(u);
+    const host = x.hostname.toLowerCase();
+    const path = x.pathname;
+    if (host === 'youtu.be') return path.length > 1 ? 'youtube' : null;
+    if (/(^|\.)youtube\.com$/.test(host)) return (path === '/watch' && x.searchParams.has('v')) || /^\/shorts\/[^/]+/.test(path) ? 'youtube' : null;
+    if (host === 'fb.watch') return path.length > 1 ? 'facebook' : null;
+    if (/(^|\.)facebook\.com$/.test(host)) {
+      if (/^\/watch\/?$/.test(path)) return x.searchParams.has('v') ? 'facebook' : null;
+      return /^\/(reel|reels)\/[^/]+|\/videos\/[^/]+|^\/share\/[rv]\/[^/]+/.test(path) ? 'facebook' : null;
+    }
+    if (/(^|\.)instagram\.com$/.test(host)) return /^\/(reels?|p|tv)\/[^/]+/.test(path) ? 'instagram' : null;
+  } catch {}
+  return null;
+}
+
+function youtubeId(u) {
   try {
     const x = new URL(u);
     if (x.hostname === 'youtu.be') return x.pathname.slice(1).split('/')[0] || null;
-    if (!/(^|\.)youtube\.com$/.test(x.hostname)) return null;
     if (x.pathname === '/watch') return x.searchParams.get('v');
     if (x.pathname.startsWith('/shorts/')) return x.pathname.split('/')[2] || null;
   } catch {}
   return null;
 }
 
-function cleanTitle(t) {
-  return (t || '').replace(/^\(\d+\)\s*/, '').replace(/ - YouTube$/, '');
+const FALLBACK_TITLE = { facebook: 'Reel de Facebook', instagram: 'Reel de Instagram' };
+
+function cleanTitle(t, u) {
+  const title = (t || '')
+    .replace(/^\(\d+\+?\)\s*/, '')
+    .replace(/ - YouTube$/, '')
+    .replace(/\s*\|\s*Facebook$/, '')
+    .replace(/\s*•\s*Instagram.*$/, '')
+    .trim();
+  const platform = platformOf(u);
+  if (!title || /^(Facebook|Instagram|Reels?|Watch)$/i.test(title)) return FALLBACK_TITLE[platform] || title;
+  return title;
 }
 
 function tpl(id) {
@@ -88,6 +120,10 @@ function paintMode() {
 
 function paintQuality() {
   qualityLabelEl.textContent = qualityEl.options[qualityEl.selectedIndex]?.textContent || '';
+}
+
+function paintTrim() {
+  document.getElementById('trimSilence').setAttribute('aria-checked', String(!!state.trimSilence));
 }
 
 function paintFolders() {
@@ -208,7 +244,7 @@ async function paintKeys() {
   });
   document.getElementById('keysHint').textContent = FIREFOX
     ? 'Toca un atajo y presiona la combinación nueva. Esc cancela.'
-    : 'Toca un atajo para cambiarlo en la página de atajos del navegador.';
+    : 'Toca un atajo para cambiarlo.';
 }
 
 function shortcutsPage() {
@@ -279,6 +315,11 @@ document.getElementById('closeNews').addEventListener('click', () => {
   goEl.focus({ preventScroll: true });
 });
 
+document.getElementById('trimRow').addEventListener('click', () => {
+  save({ trimSilence: !state.trimSilence });
+  paintTrim();
+});
+
 openSettingsEl.addEventListener('click', () => show('settings'));
 closeSettingsEl.addEventListener('click', () => show('main'));
 document.addEventListener('keydown', (e) => {
@@ -322,7 +363,7 @@ goEl.addEventListener('click', async () => {
   if (!tab) return;
   hostNotice = '';
   await save({ [QKEY[state.mode]]: qualityEl.value, notice: '' });
-  chrome.runtime.sendMessage({ type: 'download', url: tab.url, title: cleanTitle(tab.title), mode: state.mode });
+  chrome.runtime.sendMessage({ type: 'download', url: tab.url, title: cleanTitle(tab.title, tab.url), mode: state.mode });
 });
 
 listEl.addEventListener('click', (e) => {
@@ -351,16 +392,21 @@ chrome.storage.onChanged.addListener((c) => {
 });
 
 chrome.tabs.query({ active: true, currentWindow: true }).then(([t]) => {
-  const id = t && videoId(t.url);
-  if (id) {
+  const platform = t && platformOf(t.url);
+  if (platform) {
     tab = t;
-    titleEl.textContent = cleanTitle(t.title);
-    const img = new Image();
-    img.alt = '';
-    img.onload = () => thumbEl.replaceChildren(img);
-    img.src = `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg`;
+    titleEl.textContent = cleanTitle(t.title, t.url);
+    const id = platform === 'youtube' ? youtubeId(t.url) : null;
+    const src = id ? `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg` : /^https:\/\//.test(t.favIconUrl || '') ? t.favIconUrl : '';
+    if (src) {
+      const img = new Image();
+      img.alt = '';
+      if (!id) img.className = 'favicon';
+      img.onload = () => thumbEl.replaceChildren(img);
+      img.src = src;
+    }
   } else {
-    titleEl.textContent = 'Abre un video de YouTube para descargarlo.';
+    titleEl.textContent = 'Abre un video de YouTube, Facebook o Instagram para descargarlo.';
     titleEl.classList.add('off');
     goEl.disabled = true;
   }
@@ -385,6 +431,7 @@ chrome.storage.local.get(null).then((data) => {
   if (!QUALITY[state.mode]) state.mode = 'video';
   paintMode();
   paintFolders();
+  paintTrim();
   hostNotice = merged.notice || '';
   render(merged.jobs || {});
   paintUpdate(merged.update);

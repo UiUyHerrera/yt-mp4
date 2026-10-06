@@ -9,19 +9,35 @@ const ACTIVE = ['downloading', 'paused', 'cancelling'];
 const ports = new Map();
 let chain = Promise.resolve();
 
-function isVideo(u) {
+function platformOf(u) {
   try {
     const x = new URL(u);
-    if (x.hostname === 'youtu.be') return true;
-    if (!/(^|\.)youtube\.com$/.test(x.hostname)) return false;
-    return (x.pathname === '/watch' && x.searchParams.has('v')) || x.pathname.startsWith('/shorts/');
-  } catch {
-    return false;
-  }
+    const host = x.hostname.toLowerCase();
+    const path = x.pathname;
+    if (host === 'youtu.be') return path.length > 1 ? 'youtube' : null;
+    if (/(^|\.)youtube\.com$/.test(host)) return (path === '/watch' && x.searchParams.has('v')) || /^\/shorts\/[^/]+/.test(path) ? 'youtube' : null;
+    if (host === 'fb.watch') return path.length > 1 ? 'facebook' : null;
+    if (/(^|\.)facebook\.com$/.test(host)) {
+      if (/^\/watch\/?$/.test(path)) return x.searchParams.has('v') ? 'facebook' : null;
+      return /^\/(reel|reels)\/[^/]+|\/videos\/[^/]+|^\/share\/[rv]\/[^/]+/.test(path) ? 'facebook' : null;
+    }
+    if (/(^|\.)instagram\.com$/.test(host)) return /^\/(reels?|p|tv)\/[^/]+/.test(path) ? 'instagram' : null;
+  } catch {}
+  return null;
 }
 
-function cleanTitle(t) {
-  return (t || '').replace(/^\(\d+\)\s*/, '').replace(/ - YouTube$/, '');
+const FALLBACK_TITLE = { facebook: 'Reel de Facebook', instagram: 'Reel de Instagram' };
+
+function cleanTitle(t, u) {
+  const title = (t || '')
+    .replace(/^\(\d+\+?\)\s*/, '')
+    .replace(/ - YouTube$/, '')
+    .replace(/\s*\|\s*Facebook$/, '')
+    .replace(/\s*•\s*Instagram.*$/, '')
+    .trim();
+  const platform = platformOf(u);
+  if (!title || /^(Facebook|Instagram|Reels?|Watch)$/i.test(title)) return FALLBACK_TITLE[platform] || title;
+  return title;
 }
 
 function isActive(job) {
@@ -115,7 +131,7 @@ function run(job) {
       setJob(id, { state: 'error', status: '', error: nativeError('El programa local se cerró.') });
     }
   });
-  port.postMessage({ type: 'download', url: job.url, quality: job.quality, folder: job.folder });
+  port.postMessage({ type: 'download', url: job.url, quality: job.quality, folder: job.folder, trim: !!job.trim });
 }
 
 async function control(id, action) {
@@ -131,7 +147,7 @@ async function control(id, action) {
 }
 
 async function queue(url, title, mode) {
-  const s = await chrome.storage.local.get(['qualityVideo', 'qualityAudio', 'folderMp4', 'folderMp3', 'folder']);
+  const s = await chrome.storage.local.get(['qualityVideo', 'qualityAudio', 'folderMp4', 'folderMp3', 'folder', 'trimSilence']);
   const audio = mode === 'audio';
   const kbps = s.qualityAudio || '320';
   const height = s.qualityVideo || '720';
@@ -142,6 +158,7 @@ async function queue(url, title, mode) {
     quality: audio ? `mp3-${kbps}` : height,
     meta: audio ? `MP3 · ${kbps}` : height === 'best' ? 'Máxima' : `${height}p`,
     folder: (audio ? s.folderMp3 : s.folderMp4) ?? s.folder ?? '',
+    trim: audio && !!s.trimSilence,
   });
 }
 
@@ -153,7 +170,7 @@ async function retry(id) {
       delete jobs[id];
     }
   });
-  if (job) run({ url: job.url, title: job.title, mode: job.mode, quality: job.quality, meta: job.meta, folder: job.folder });
+  if (job) run({ url: job.url, title: job.title, mode: job.mode, quality: job.quality, meta: job.meta, folder: job.folder, trim: job.trim });
 }
 
 function ask(message, onReply) {
@@ -261,11 +278,11 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
   const mode = command === 'download-mp3' ? 'audio' : command === 'download-mp4' ? 'video' : null;
   if (!mode) return;
   if (!tab || !tab.url) [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !isVideo(tab.url)) {
+  if (!tab || !platformOf(tab.url)) {
     flash('!', '#d70015');
     return;
   }
-  queue(tab.url, cleanTitle(tab.title), mode);
+  queue(tab.url, cleanTitle(tab.title, tab.url), mode);
 });
 
 chrome.runtime.onStartup.addListener(() => {
