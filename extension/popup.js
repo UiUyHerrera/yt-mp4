@@ -10,6 +10,13 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['queued', 'downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.9.2': [
+    'Clic derecho en un video o link: Descargar MP4 o MP3.',
+    'Playlists y álbumes de YouTube: baja la lista completa en su carpeta.',
+    'Se bajan 3 a la vez y el resto queda en espera.',
+    'Aviso al terminar, con botón para abrir la carpeta.',
+    'Una descarga trabada ya no frena las actualizaciones.',
+  ],
   '1.9.1': [
     'Clic derecho en un video o link: Descargar MP4 o MP3.',
     'Playlists y álbumes de YouTube: baja la lista completa en su carpeta.',

@@ -121,7 +121,11 @@ def refresh_ytdlp():
     except OSError:
         pass
     cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "--quiet", "yt-dlp[default,curl-cffi]"]
-    if subprocess.run(cmd, capture_output=True, timeout=300).returncode == 0:
+    try:
+        upgraded = subprocess.run(cmd, capture_output=True, timeout=300).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        upgraded = False
+    if upgraded:
         with open(stamp, "w") as f:
             f.write(str(int(time.time())))
 
