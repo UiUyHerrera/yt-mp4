@@ -10,7 +10,7 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['downloading', 'paused', 'cancelling'];
 const CHANGES = {
-  '1.8.1': [
+  '1.8.2': [
     'TikTok: descarga el video que estás viendo en el feed Para ti.',
     'Descarga videos de TikTok.',
     'Menú de calidad con estilo propio.',
@@ -610,7 +610,9 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(async ([t]) => {
       img.src = src;
     }
   } else {
-    titleEl.textContent = 'Abre un video de YouTube, Facebook, Instagram o TikTok para descargarlo.';
+    titleEl.textContent = /^https:\/\/([\w-]+\.)*tiktok\.com\//.test(t?.url || '')
+      ? 'No encontré el video en pantalla. Ábrelo en su propia página para descargarlo.'
+      : 'Abre un video de YouTube, Facebook, Instagram o TikTok para descargarlo.';
     titleEl.classList.add('off');
     goEl.disabled = true;
   }

@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [extension/manifest.json]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Leer versión y novedades
+        id: meta
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          version = json.load(open("extension/manifest.json", encoding="utf-8"))["version"]
+          popup = open("extension/popup.js", encoding="utf-8").read()
+          block = re.search(r"'" + re.escape(version) + r"': \[(.*?)\]", popup, re.S)
+          items = re.findall(r"'((?:[^'\\]|\\.)*)'", block.group(1)) if block else []
+          with open("notes.md", "w", encoding="utf-8") as f:
+              f.write("".join(f"- {item}\n" for item in items) or f"mpeasy {version}\n")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"version={version}\n")
+          PY
+
+      - name: Publicar release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1 || gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "La versión $VERSION ya está publicada."
+            exit 0
+          fi
+          python3 build.py
+          gh release create "v$VERSION" dist/yt-mp4.zip --target "$GITHUB_SHA" --title "mpeasy $VERSION" --notes-file notes.md
