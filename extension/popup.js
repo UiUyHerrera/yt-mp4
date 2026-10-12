@@ -10,6 +10,12 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.8.1': [
+    'TikTok: descarga el video que estás viendo en el feed Para ti.',
+    'Descarga videos de TikTok.',
+    'Menú de calidad con estilo propio.',
+    'Botón Donar con los datos y los últimos donadores.',
+  ],
   '1.8.0': [
     'Descarga videos de TikTok.',
     'Cada descarga de TikTok muestra su logo.',
@@ -75,7 +81,7 @@ const bannerEl = document.getElementById('updateBanner');
 const newsEl = document.getElementById('whatsNew');
 
 const state = { mode: 'video', qualityVideo: DEFAULT.video, qualityAudio: DEFAULT.audio, folderMp4: '', folderMp3: '', trimSilence: false };
-let tab = null;
+let target = null;
 let recording = null;
 let hostNotice = '';
 
@@ -93,7 +99,7 @@ function platformOf(u) {
     }
     if (/(^|\.)instagram\.com$/.test(host)) return /^\/(reels?|p|tv)\/[^/]+/.test(path) ? 'instagram' : null;
     if (host === 'vm.tiktok.com' || host === 'vt.tiktok.com') return path.length > 1 ? 'tiktok' : null;
-    if (/(^|\.)tiktok\.com$/.test(host)) return /^\/@[^/]+\/video\/\d+|^\/v\/\d+|^\/t\/[^/]+/.test(path) ? 'tiktok' : null;
+    if (/(^|\.)tiktok\.com$/.test(host)) return /^\/@[^/]*\/video\/\d+|^\/t\/[^/]+/.test(path) ? 'tiktok' : null;
   } catch {}
   return null;
 }
@@ -108,21 +114,7 @@ function youtubeId(u) {
   return null;
 }
 
-const FALLBACK_TITLE = { facebook: 'Reel de Facebook', instagram: 'Reel de Instagram', tiktok: 'Video de TikTok' };
 const PLATFORM_NAME = { youtube: 'YouTube', facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok' };
-
-function cleanTitle(t, u) {
-  const title = (t || '')
-    .replace(/^\(\d+\+?\)\s*/, '')
-    .replace(/ - YouTube$/, '')
-    .replace(/\s*\|\s*Facebook$/, '')
-    .replace(/\s*•\s*Instagram.*$/, '')
-    .replace(/\s*\|\s*TikTok$/, '')
-    .trim();
-  const platform = platformOf(u);
-  if (!title || /^(Facebook|Instagram|TikTok|Reels?|Watch)$/i.test(title)) return FALLBACK_TITLE[platform] || title;
-  return title;
-}
 
 function tpl(id) {
   return document.getElementById(id).content.firstElementChild.cloneNode(true);
@@ -572,10 +564,10 @@ document.querySelectorAll('.pick').forEach((b) => {
 });
 
 goEl.addEventListener('click', async () => {
-  if (!tab) return;
+  if (!target) return;
   hostNotice = '';
   await save({ [QKEY[state.mode]]: currentQuality(), notice: '' });
-  chrome.runtime.sendMessage({ type: 'download', url: tab.url, title: cleanTitle(tab.title, tab.url), mode: state.mode });
+  chrome.runtime.sendMessage({ type: 'download', url: target.url, title: target.title, mode: state.mode });
 });
 
 listEl.addEventListener('click', (e) => {
@@ -603,12 +595,12 @@ chrome.storage.onChanged.addListener((c) => {
   if (repaint) paintFolders();
 });
 
-chrome.tabs.query({ active: true, currentWindow: true }).then(([t]) => {
-  const platform = t && platformOf(t.url);
+chrome.tabs.query({ active: true, currentWindow: true }).then(async ([t]) => {
+  target = t ? await chrome.runtime.sendMessage({ type: 'resolve', tabId: t.id }).catch(() => null) : null;
+  const platform = target && platformOf(target.url);
   if (platform) {
-    tab = t;
-    titleEl.textContent = cleanTitle(t.title, t.url);
-    const id = platform === 'youtube' ? youtubeId(t.url) : null;
+    titleEl.textContent = target.title;
+    const id = platform === 'youtube' ? youtubeId(target.url) : null;
     const src = id ? `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg` : /^https:\/\//.test(t.favIconUrl || '') ? t.favIconUrl : '';
     if (src) {
       const img = new Image();

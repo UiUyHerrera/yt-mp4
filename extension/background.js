@@ -23,7 +23,7 @@ function platformOf(u) {
     }
     if (/(^|\.)instagram\.com$/.test(host)) return /^\/(reels?|p|tv)\/[^/]+/.test(path) ? 'instagram' : null;
     if (host === 'vm.tiktok.com' || host === 'vt.tiktok.com') return path.length > 1 ? 'tiktok' : null;
-    if (/(^|\.)tiktok\.com$/.test(host)) return /^\/@[^/]+\/video\/\d+|^\/v\/\d+|^\/t\/[^/]+/.test(path) ? 'tiktok' : null;
+    if (/(^|\.)tiktok\.com$/.test(host)) return /^\/@[^/]*\/video\/\d+|^\/t\/[^/]+/.test(path) ? 'tiktok' : null;
   } catch {}
   return null;
 }
@@ -41,6 +41,51 @@ function cleanTitle(t, u) {
   const platform = platformOf(u);
   if (!title || /^(Facebook|Instagram|TikTok|Reels?|Watch)$/i.test(title)) return FALLBACK_TITLE[platform] || title;
   return title;
+}
+
+function visibleTiktok() {
+  let best = null;
+  let bestArea = 0;
+  for (const video of document.querySelectorAll('video')) {
+    const r = video.getBoundingClientRect();
+    const w = Math.min(r.right, innerWidth) - Math.max(r.left, 0);
+    const h = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+    if (w > 0 && h > 0 && w * h > bestArea) {
+      best = video;
+      bestArea = w * h;
+    }
+  }
+  let scope = best;
+  while (scope && scope.parentElement && scope.parentElement.querySelectorAll('video').length === 1) scope = scope.parentElement;
+  if (!scope) return null;
+  const desc = scope.querySelector('[data-e2e="video-desc"], [data-e2e="browse-video-desc"]');
+  const title = desc ? desc.textContent : '';
+  const link = [...scope.querySelectorAll('a[href*="/video/"]')].find((a) => /\/video\/\d+/.test(a.pathname));
+  if (link) return { url: link.href, title };
+  const ids = [scope, ...scope.querySelectorAll('[id]')].map((n) => (n.id || '').match(/\d{15,}/)).filter(Boolean);
+  if (!ids.length) return null;
+  const author = [...scope.querySelectorAll('a[href^="/@"]')].map((a) => a.pathname.match(/^\/@([\w.-]+)\/?$/)).find(Boolean);
+  return { url: `https://www.tiktok.com/@${author ? author[1] : ''}/video/${ids[0][0]}`, title };
+}
+
+async function resolveTab(tab) {
+  if (!tab || !tab.url) return null;
+  if (platformOf(tab.url)) return { url: tab.url, title: cleanTitle(tab.title, tab.url) };
+  let host = '';
+  try {
+    host = new URL(tab.url).hostname.toLowerCase();
+  } catch {}
+  if (!/(^|\.)tiktok\.com$/.test(host)) return null;
+  try {
+    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: visibleTiktok });
+    if (!result || platformOf(result.url) !== 'tiktok') return null;
+    const url = new URL(result.url);
+    url.search = '';
+    url.hash = '';
+    return { url: url.href, title: cleanTitle(String(result.title || '').replace(/\s+/g, ' ').slice(0, 200), url.href) };
+  } catch {
+    return null;
+  }
 }
 
 function isActive(job) {
@@ -264,7 +309,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 chrome.runtime.onInstalled.addListener(scheduleUpdates);
 
-chrome.runtime.onMessage.addListener((msg) => {
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (msg.type === 'resolve') {
+    chrome.tabs.get(msg.tabId).then(resolveTab, () => null).then(reply);
+    return true;
+  }
   if (msg.type === 'update') checkUpdate(!msg.auto);
   if (msg.type === 'download') queue(msg.url, msg.title, msg.mode);
   if (msg.type === 'retry') retry(msg.id);
@@ -282,11 +331,12 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
   const mode = command === 'download-mp3' ? 'audio' : command === 'download-mp4' ? 'video' : null;
   if (!mode) return;
   if (!tab || !tab.url) [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !platformOf(tab.url)) {
+  const target = await resolveTab(tab);
+  if (!target) {
     flash('!', '#d70015');
     return;
   }
-  queue(tab.url, cleanTitle(tab.title, tab.url), mode);
+  queue(target.url, target.title, mode);
 });
 
 chrome.runtime.onStartup.addListener(() => {
