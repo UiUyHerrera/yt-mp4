@@ -248,8 +248,8 @@ def path_units(text):
     return len(text.encode("utf-16-le")) // 2
 
 
-def short_title(title, target):
-    limit = max(20, min(120, MAX_PATH_UNITS - RESERVED_UNITS - path_units(target)))
+def short_title(title, target, extra=0):
+    limit = max(20, min(120, MAX_PATH_UNITS - RESERVED_UNITS - path_units(target) - extra))
     if path_units(title) <= limit:
         return title
     cut = title
@@ -511,14 +511,35 @@ def reserve_name(ydl, info, target, final_ext):
     raise RuntimeError("No se pudo elegir un nombre libre para el archivo.")
 
 
-def download(url, quality, folder, control, trim=False, hint="", subfolder=""):
+MAX_CLIP_END = 24 * 3600
+
+
+def clock(seconds):
+    s = max(0, int(seconds))
+    h, m, rest = s // 3600, s % 3600 // 60, s % 60
+    return f"{h}:{m:02d}:{rest:02d}" if h else f"{m}:{rest:02d}"
+
+
+def parse_clip(clip):
+    if not isinstance(clip, dict):
+        return None
     try:
-        download_once(url, quality, folder, control, trim, hint, subfolder)
+        start, end = float(clip.get("start")), float(clip.get("end"))
+    except (TypeError, ValueError):
+        raise ValueError("El tramo elegido no es válido.")
+    if not (0 <= start and end <= MAX_CLIP_END and end - start >= 1):
+        raise ValueError("El tramo elegido no es válido.")
+    return start, end
+
+
+def download(url, quality, folder, control, trim=False, hint="", subfolder="", clip=None):
+    try:
+        download_once(url, quality, folder, control, trim, hint, subfolder, clip)
     except TrimFailed:
-        download_once(url, quality, folder, control, False, hint, subfolder)
+        download_once(url, quality, folder, control, False, hint, subfolder, clip)
 
 
-def download_once(url, quality, folder, control, trim, hint, subfolder):
+def download_once(url, quality, folder, control, trim, hint, subfolder, clip):
     yt_dlp = load_ytdlp()
     state = {"last": -1.0}
     mp3 = quality.startswith("mp3")
@@ -571,6 +592,11 @@ def download_once(url, quality, folder, control, trim, hint, subfolder):
         ]
         if trim:
             opts["postprocessor_args"] = {"extractaudio": ["-af", SILENCE_FILTER]}
+    span = ""
+    if clip:
+        opts["download_ranges"] = yt_dlp.utils.download_range_func(None, [clip])
+        opts["force_keyframes_at_cuts"] = True
+        span = f" ({clock(clip[0])}-{clock(clip[1])})".replace(":", ".")
     ff = tools.ffmpeg_dir()
     if ff:
         opts["ffmpeg_location"] = ff
@@ -590,7 +616,7 @@ def download_once(url, quality, folder, control, trim, hint, subfolder):
                     formats = info.get("formats") or []
                     if mp3 and formats and all(f.get("acodec") == "none" for f in formats):
                         raise RuntimeError(NO_AUDIO)
-                    info["title"] = short_title(nice_title(info, url, hint), target)
+                    info["title"] = short_title(nice_title(info, url, hint), target, len(span)) + span
                     send({"type": "info", "title": info["title"]})
                     if reserved is None:
                         reserved = reserve_name(ydl, info, target, ".mp3" if mp3 else ".mp4")
@@ -658,7 +684,7 @@ def main():
         quality = msg.get("quality", "720")
         if quality == "mp3":
             quality = "mp3-320"
-        download(msg["url"], quality, msg.get("folder"), control, bool(msg.get("trim")), msg.get("title") or "", msg.get("subfolder") or "")
+        download(msg["url"], quality, msg.get("folder"), control, bool(msg.get("trim")), msg.get("title") or "", msg.get("subfolder") or "", parse_clip(msg.get("clip")))
     except Cancelled:
         send({"type": "cancelled"})
     except Exception as e:
