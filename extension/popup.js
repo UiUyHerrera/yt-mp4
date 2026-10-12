@@ -8,8 +8,14 @@ const PICK_TITLE = { folderMp4: 'Carpeta para MP4', folderMp3: 'Carpeta para MP3
 const CIRC = 2 * Math.PI * 8;
 const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBrowserInfo === 'function';
 const VERSION = chrome.runtime.getManifest().version;
-const ACTIVE = ['downloading', 'paused', 'cancelling'];
+const ACTIVE = ['queued', 'downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.9.0': [
+    'Clic derecho en un video o link: Descargar MP4 o MP3.',
+    'Playlists y álbumes de YouTube: baja la lista completa en su carpeta.',
+    'Se bajan 3 a la vez y el resto queda en espera.',
+    'Aviso al terminar, con botón para abrir la carpeta.',
+  ],
   '1.8.3': [
     'TikTok: vista previa del video arriba.',
     'TikTok: el archivo se guarda con su título.',
@@ -85,7 +91,10 @@ const thumbEl = document.getElementById('thumb');
 const bannerEl = document.getElementById('updateBanner');
 const newsEl = document.getElementById('whatsNew');
 
-const state = { mode: 'video', qualityVideo: DEFAULT.video, qualityAudio: DEFAULT.audio, folderMp4: '', folderMp3: '', trimSilence: false };
+const state = { mode: 'video', qualityVideo: DEFAULT.video, qualityAudio: DEFAULT.audio, folderMp4: '', folderMp3: '', trimSilence: false, notify: true };
+const scopeSegEl = document.getElementById('scopeSeg');
+const cancelAllEl = document.getElementById('cancelAll');
+let scope = 'video';
 let target = null;
 let recording = null;
 let hostNotice = '';
@@ -96,7 +105,7 @@ function platformOf(u) {
     const host = x.hostname.toLowerCase();
     const path = x.pathname;
     if (host === 'youtu.be') return path.length > 1 ? 'youtube' : null;
-    if (/(^|\.)youtube\.com$/.test(host)) return (path === '/watch' && x.searchParams.has('v')) || /^\/shorts\/[^/]+/.test(path) ? 'youtube' : null;
+    if (/(^|\.)youtube\.com$/.test(host)) return (path === '/watch' && x.searchParams.has('v')) || (path === '/playlist' && x.searchParams.has('list')) || /^\/shorts\/[^/]+/.test(path) ? 'youtube' : null;
     if (host === 'fb.watch') return path.length > 1 ? 'facebook' : null;
     if (/(^|\.)facebook\.com$/.test(host)) {
       if (/^\/watch\/?$/.test(path)) return x.searchParams.has('v') ? 'facebook' : null;
@@ -264,6 +273,12 @@ async function switchTheme(theme) {
 
 function paintTrim() {
   document.getElementById('trimSilence').setAttribute('aria-checked', String(!!state.trimSilence));
+  document.getElementById('notify').setAttribute('aria-checked', String(state.notify !== false));
+}
+
+function paintScope() {
+  scopeSegEl.dataset.mode = scope;
+  scopeSegEl.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.scope === scope)));
 }
 
 function paintFolders() {
@@ -295,6 +310,8 @@ function show(view) {
 
 function metaFor(j) {
   const pct = `${Math.round(j.percent || 0)}%`;
+  if (j.state === 'queued') return 'En espera';
+  if (j.kind === 'list' && j.state === 'downloading') return j.status;
   if (j.state === 'downloading') return j.status ? `${j.status} ${pct}` : pct;
   if (j.state === 'paused') return `Pausada ${pct}`;
   if (j.state === 'cancelling') return 'Cancelando…';
@@ -329,7 +346,8 @@ function row(id, j) {
   }
   li.append(name, el('span', j.state === 'error' ? 'meta err' : 'meta', metaFor(j)));
   const acts = el('span', 'acts');
-  if (j.state === 'downloading') acts.append(tpl('t-pause'), tpl('t-cancel'));
+  if (j.state === 'queued') acts.append(tpl('t-cancel'));
+  if (j.state === 'downloading' && j.kind !== 'list') acts.append(tpl('t-pause'), tpl('t-cancel'));
   if (j.state === 'paused') acts.append(tpl('t-resume'), tpl('t-cancel'));
   if (j.state === 'done' && j.path) acts.append(tpl('t-reveal'));
   if ((j.state === 'error' || j.state === 'cancelled') && j.url) acts.append(tpl('t-retry'));
@@ -342,6 +360,7 @@ function render(jobs) {
   if (!list.length) listEl.replaceChildren(el('li', 'empty', 'Lo que descargues aparece aquí.'));
   else listEl.replaceChildren(...list.map(([id, j]) => row(id, j)));
   clearEl.hidden = !list.some(([, j]) => !ACTIVE.includes(j.state));
+  cancelAllEl.hidden = list.filter(([, j]) => ACTIVE.includes(j.state) && j.kind !== 'list').length < 2;
   const latest = list[0] && list[0][1];
   showNotice(hostNotice || (latest && latest.state === 'error' ? latest.error : ''));
 }
@@ -572,7 +591,8 @@ goEl.addEventListener('click', async () => {
   if (!target) return;
   hostNotice = '';
   await save({ [QKEY[state.mode]]: currentQuality(), notice: '' });
-  chrome.runtime.sendMessage({ type: 'download', url: target.url, title: target.title, mode: state.mode });
+  if (scope === 'list' && target.list) chrome.runtime.sendMessage({ type: 'download-list', url: target.url, mode: state.mode });
+  else chrome.runtime.sendMessage({ type: 'download', url: target.url, title: target.title, mode: state.mode });
 });
 
 listEl.addEventListener('click', (e) => {
@@ -582,6 +602,19 @@ listEl.addEventListener('click', (e) => {
 });
 
 clearEl.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'clear' }));
+cancelAllEl.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'cancel-all' }));
+
+scopeSegEl.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  scope = b.dataset.scope;
+  paintScope();
+});
+
+document.getElementById('notifyRow').addEventListener('click', () => {
+  save({ notify: state.notify === false });
+  paintTrim();
+});
 
 chrome.storage.onChanged.addListener((c) => {
   if (c.jobs) render(c.jobs.newValue || {});
@@ -605,6 +638,11 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(async ([t]) => {
   const platform = target && platformOf(target.url);
   if (platform) {
     titleEl.textContent = target.title;
+    if (target.list) {
+      scope = target.list.only ? 'list' : 'video';
+      scopeSegEl.hidden = target.list.only;
+      paintScope();
+    }
     const id = platform === 'youtube' ? youtubeId(target.url) : null;
     const preview = id ? `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg` : target.thumb;
     const src = preview || (/^https:\/\//.test(t.favIconUrl || '') ? t.favIconUrl : '');
