@@ -39,7 +39,7 @@ class Progress:
 
 def ensure_ytdlp():
     step(2, "Instalando yt-dlp")
-    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "--quiet", "yt-dlp[default]"]
+    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "--quiet", "yt-dlp[default,curl-cffi]"]
     if subprocess.run(cmd).returncode != 0:
         subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], capture_output=True)
         if subprocess.run(cmd).returncode != 0:

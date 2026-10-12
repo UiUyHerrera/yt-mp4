@@ -22,11 +22,13 @@ function platformOf(u) {
       return /^\/(reel|reels)\/[^/]+|\/videos\/[^/]+|^\/share\/[rv]\/[^/]+/.test(path) ? 'facebook' : null;
     }
     if (/(^|\.)instagram\.com$/.test(host)) return /^\/(reels?|p|tv)\/[^/]+/.test(path) ? 'instagram' : null;
+    if (host === 'vm.tiktok.com' || host === 'vt.tiktok.com') return path.length > 1 ? 'tiktok' : null;
+    if (/(^|\.)tiktok\.com$/.test(host)) return /^\/@[^/]+\/video\/\d+|^\/v\/\d+|^\/t\/[^/]+/.test(path) ? 'tiktok' : null;
   } catch {}
   return null;
 }
 
-const FALLBACK_TITLE = { facebook: 'Reel de Facebook', instagram: 'Reel de Instagram' };
+const FALLBACK_TITLE = { facebook: 'Reel de Facebook', instagram: 'Reel de Instagram', tiktok: 'Video de TikTok' };
 
 function cleanTitle(t, u) {
   const title = (t || '')
@@ -34,9 +36,10 @@ function cleanTitle(t, u) {
     .replace(/ - YouTube$/, '')
     .replace(/\s*\|\s*Facebook$/, '')
     .replace(/\s*•\s*Instagram.*$/, '')
+    .replace(/\s*\|\s*TikTok$/, '')
     .trim();
   const platform = platformOf(u);
-  if (!title || /^(Facebook|Instagram|Reels?|Watch)$/i.test(title)) return FALLBACK_TITLE[platform] || title;
+  if (!title || /^(Facebook|Instagram|TikTok|Reels?|Watch)$/i.test(title)) return FALLBACK_TITLE[platform] || title;
   return title;
 }
 
