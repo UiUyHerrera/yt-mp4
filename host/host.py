@@ -296,6 +296,48 @@ def resolve_folder(folder):
     return folder
 
 
+WINDOWS_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+UNAVAILABLE = {"[Private video]", "[Deleted video]"}
+LIST_LIMIT = 200
+
+
+def safe_folder_name(name):
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', " ", name if isinstance(name, str) else "")
+    name = re.sub(r"\s+", " ", name).strip(" .")[:80].strip(" .")
+    return f"{name}_" if name.upper() in WINDOWS_RESERVED else name
+
+
+def target_folder(folder, subfolder):
+    target = resolve_folder(folder)
+    name = safe_folder_name(subfolder)
+    if not name:
+        return target
+    target = os.path.join(target, name)
+    try:
+        os.makedirs(target, exist_ok=True)
+    except OSError as e:
+        raise ValueError(f"No se pudo crear la carpeta {target}: {e.strerror}")
+    return target
+
+
+def list_playlist(url, limit):
+    yt_dlp = load_ytdlp()
+    limit = max(1, min(int(limit) if str(limit).isdigit() else LIST_LIMIT, LIST_LIMIT))
+    opts = {"extract_flat": "in_playlist", "playlistend": limit, "noplaylist": False, "quiet": True, "no_warnings": True, "no_color": True}
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+    entries = []
+    for entry in info.get("entries") or []:
+        if len(entries) >= limit:
+            break
+        video_id = (entry or {}).get("id") or ""
+        title = re.sub(r"\s+", " ", (entry or {}).get("title") or "").strip()
+        if not re.fullmatch(r"[\w-]{11}", video_id) or title in UNAVAILABLE:
+            continue
+        entries.append({"url": f"https://www.youtube.com/watch?v={video_id}", "title": title[:200]})
+    send({"type": "list", "title": re.sub(r"\s+", " ", info.get("title") or "").strip()[:120], "entries": entries})
+
+
 def bring_to_front(root):
     import ctypes
 
@@ -465,19 +507,19 @@ def reserve_name(ydl, info, target, final_ext):
     raise RuntimeError("No se pudo elegir un nombre libre para el archivo.")
 
 
-def download(url, quality, folder, control, trim=False, hint=""):
+def download(url, quality, folder, control, trim=False, hint="", subfolder=""):
     try:
-        download_once(url, quality, folder, control, trim, hint)
+        download_once(url, quality, folder, control, trim, hint, subfolder)
     except TrimFailed:
-        download_once(url, quality, folder, control, False, hint)
+        download_once(url, quality, folder, control, False, hint, subfolder)
 
 
-def download_once(url, quality, folder, control, trim, hint):
+def download_once(url, quality, folder, control, trim, hint, subfolder):
     yt_dlp = load_ytdlp()
     state = {"last": -1.0}
     mp3 = quality.startswith("mp3")
     kbps = quality.split("-")[1] if "-" in quality else "320"
-    target = resolve_folder(folder)
+    target = target_folder(folder, subfolder)
     ensure_tools(control)
     started = time.time() - 2
     created = set()
@@ -587,6 +629,13 @@ def main():
     if msg.get("type") == "reveal":
         reveal(msg.get("path"))
         return
+    if msg.get("type") == "list":
+        try:
+            list_playlist(msg["url"], msg.get("limit", LIST_LIMIT))
+        except Exception as e:
+            text = ANSI.sub("", str(e)).replace("ERROR: ", "")
+            send({"type": "error", "message": friendly_error(text, msg.get("url", ""))[:300]})
+        return
     if msg.get("type") == "ping":
         try:
             ping()
@@ -605,7 +654,7 @@ def main():
         quality = msg.get("quality", "720")
         if quality == "mp3":
             quality = "mp3-320"
-        download(msg["url"], quality, msg.get("folder"), control, bool(msg.get("trim")), msg.get("title") or "")
+        download(msg["url"], quality, msg.get("folder"), control, bool(msg.get("trim")), msg.get("title") or "", msg.get("subfolder") or "")
     except Cancelled:
         send({"type": "cancelled"})
     except Exception as e:

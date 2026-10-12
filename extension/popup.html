@@ -84,7 +84,7 @@
     box-shadow: var(--pill-shadow);
     transition: transform .25s cubic-bezier(.3,.7,.4,1);
   }
-  .seg[data-mode="audio"]::before, .seg[data-mode="light"]::before { transform: translateX(100%); }
+  .seg[data-mode="audio"]::before, .seg[data-mode="light"]::before, .seg[data-mode="list"]::before { transform: translateX(100%); }
   .seg.mini { flex: none; width: 148px; margin: 0 0 0 auto; }
   .seg.mini button { min-height: 30px; font-size: 12px; }
   .seg button {
@@ -247,6 +247,7 @@
   .rowlink:disabled { color: var(--secondary); font-weight: 400; cursor: default; }
   .bar + .sec { margin-top: 8px; }
 
+  body:has(#settings:not([hidden])) .foot { display: none; }
   .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; min-height: 32px; }
   .donate {
     display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px 0 10px; margin-left: -2px;
@@ -309,6 +310,11 @@
       <button type="button" class="icon" id="openSettings" aria-label="Ajustes" title="Ajustes"><svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
     </header>
 
+    <div class="seg" id="scopeSeg" data-mode="video" role="radiogroup" aria-label="Qué descargar" hidden>
+      <button type="button" role="radio" aria-checked="true" data-scope="video">Este video</button>
+      <button type="button" role="radio" aria-checked="false" data-scope="list">Lista completa</button>
+    </div>
+
     <div class="seg" id="seg" data-mode="video" role="tablist" aria-label="Formato">
       <button type="button" role="tab" aria-selected="true" data-mode="video">Video</button>
       <button type="button" role="tab" aria-selected="false" data-mode="audio">Audio</button>
@@ -333,7 +339,10 @@
 
     <div class="head">
       <h2>Descargas</h2>
-      <button type="button" class="link" id="clear" hidden>Limpiar</button>
+      <div>
+        <button type="button" class="link" id="cancelAll" hidden>Cancelar todo</button>
+        <button type="button" class="link" id="clear" hidden>Limpiar</button>
+      </div>
     </div>
     <ul class="list" id="list"></ul>
   </div>
@@ -357,7 +366,7 @@
         <button type="button" class="pick" data-key="folderMp3" aria-label="Elegir carpeta para MP3" title="Elegir carpeta para MP3"><svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 4.25c0-.83.67-1.5 1.5-1.5h3l1.5 1.5h5c.83 0 1.5.67 1.5 1.5v6c0 .83-.67 1.5-1.5 1.5h-9.5c-.83 0-1.5-.67-1.5-1.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></button>
       </div>
     </div>
-    <p class="hint">Escribe una ruta o toca la carpeta. Si no existe, se crea.</p>
+    <p class="hint">Escribe una ruta o elige una carpeta.</p>
 
     <h2 class="sec">Preferencias</h2>
     <div class="group">
@@ -372,8 +381,12 @@
         <span class="k" id="trimLabel">Quitar silencio del inicio</span>
         <button type="button" class="switch" id="trimSilence" role="switch" aria-checked="false" aria-labelledby="trimLabel"><span></span></button>
       </div>
+      <div class="row toggle-row" id="notifyRow">
+        <span class="k" id="notifyLabel">Avisar al terminar</span>
+        <button type="button" class="switch" id="notify" role="switch" aria-checked="true" aria-labelledby="notifyLabel"><span></span></button>
+      </div>
     </div>
-    <p class="hint">Quitar silencio: solo en MP3, corta el comienzo sin sonido.</p>
+    <p class="hint">Quitar silencio se aplica solo a MP3.</p>
 
     <h2 class="sec">Atajos de teclado</h2>
     <div class="group">
