@@ -220,6 +220,7 @@ FACEBOOK_STATS = re.compile(r"^[^|]*\b(views|reactions|shares|comments|reproducc
 MAX_PATH_UNITS = 238
 RESERVED_UNITS = 22
 LOGIN_WALL = re.compile(r"login required|log ?in|logged.in|rate.?limit|not available|private|empty media|Cannot parse data", re.I)
+GENERIC_TITLE = re.compile(r"^TikTok video #\d+$")
 NO_AUDIO = "Este video no tiene sonido, así que no se puede bajar como MP3."
 
 
@@ -231,9 +232,11 @@ def format_options(quality, mp3):
     return {"format": "bv*[vcodec!^=av01]+ba/bv*+ba/b", "format_sort": [f"res:{int(quality)}", "vcodec:h264", "acodec:aac"]}
 
 
-def nice_title(info, url):
+def nice_title(info, url, hint=""):
     title = re.sub(r"\s+", " ", info.get("title") or "").strip()
     title = FACEBOOK_STATS.sub("", title).strip()
+    if not title or title == info.get("id") or GENERIC_TITLE.match(title):
+        title = re.sub(r"\s+", " ", hint if isinstance(hint, str) else "").strip()[:200] or title
     return title or info.get("id") or url
 
 
@@ -462,14 +465,14 @@ def reserve_name(ydl, info, target, final_ext):
     raise RuntimeError("No se pudo elegir un nombre libre para el archivo.")
 
 
-def download(url, quality, folder, control, trim=False):
+def download(url, quality, folder, control, trim=False, hint=""):
     try:
-        download_once(url, quality, folder, control, trim)
+        download_once(url, quality, folder, control, trim, hint)
     except TrimFailed:
-        download_once(url, quality, folder, control, False)
+        download_once(url, quality, folder, control, False, hint)
 
 
-def download_once(url, quality, folder, control, trim):
+def download_once(url, quality, folder, control, trim, hint):
     yt_dlp = load_ytdlp()
     state = {"last": -1.0}
     mp3 = quality.startswith("mp3")
@@ -541,7 +544,7 @@ def download_once(url, quality, folder, control, trim):
                     formats = info.get("formats") or []
                     if mp3 and formats and all(f.get("acodec") == "none" for f in formats):
                         raise RuntimeError(NO_AUDIO)
-                    info["title"] = short_title(nice_title(info, url), target)
+                    info["title"] = short_title(nice_title(info, url, hint), target)
                     send({"type": "info", "title": info["title"]})
                     if reserved is None:
                         reserved = reserve_name(ydl, info, target, ".mp3" if mp3 else ".mp4")
@@ -602,7 +605,7 @@ def main():
         quality = msg.get("quality", "720")
         if quality == "mp3":
             quality = "mp3-320"
-        download(msg["url"], quality, msg.get("folder"), control, bool(msg.get("trim")))
+        download(msg["url"], quality, msg.get("folder"), control, bool(msg.get("trim")), msg.get("title") or "")
     except Cancelled:
         send({"type": "cancelled"})
     except Exception as e:

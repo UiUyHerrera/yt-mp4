@@ -10,6 +10,11 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.8.3': [
+    'TikTok: vista previa del video arriba.',
+    'TikTok: el archivo se guarda con su título.',
+    'TikTok: descarga el video que estás viendo en el feed Para ti.',
+  ],
   '1.8.2': [
     'TikTok: descarga el video que estás viendo en el feed Para ti.',
     'Descarga videos de TikTok.',
@@ -601,11 +606,12 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(async ([t]) => {
   if (platform) {
     titleEl.textContent = target.title;
     const id = platform === 'youtube' ? youtubeId(target.url) : null;
-    const src = id ? `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg` : /^https:\/\//.test(t.favIconUrl || '') ? t.favIconUrl : '';
+    const preview = id ? `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg` : target.thumb;
+    const src = preview || (/^https:\/\//.test(t.favIconUrl || '') ? t.favIconUrl : '');
     if (src) {
       const img = new Image();
       img.alt = '';
-      if (!id) img.className = 'favicon';
+      if (!preview) img.className = 'favicon';
       img.onload = () => thumbEl.replaceChildren(img);
       img.src = src;
     }
