@@ -58,34 +58,55 @@ function visibleTiktok() {
   let scope = best;
   while (scope && scope.parentElement && scope.parentElement.querySelectorAll('video').length === 1) scope = scope.parentElement;
   if (!scope) return null;
+  let cover = null;
+  let coverArea = 0;
+  for (const img of scope.querySelectorAll('img')) {
+    const r = img.getBoundingClientRect();
+    if (r.width >= 100 && r.height >= 100 && r.width * r.height > coverArea) {
+      cover = img;
+      coverArea = r.width * r.height;
+    }
+  }
   const desc = scope.querySelector('[data-e2e="video-desc"], [data-e2e="browse-video-desc"]');
-  const title = desc ? desc.textContent : '';
+  const title = (desc && desc.textContent) || (cover && cover.alt) || '';
+  const thumb = best.poster || (cover && cover.currentSrc) || '';
+  const author = [...scope.querySelectorAll('a[href^="/@"]')].map((a) => a.pathname.match(/^\/@([\w.-]+)\/?$/)).find(Boolean);
+  const user = author ? author[1] : '';
   const link = [...scope.querySelectorAll('a[href*="/video/"]')].find((a) => /\/video\/\d+/.test(a.pathname));
-  if (link) return { url: link.href, title };
+  if (link) return { url: link.href, title, thumb, user };
   const ids = [scope, ...scope.querySelectorAll('[id]')].map((n) => (n.id || '').match(/\d{15,}/)).filter(Boolean);
   if (!ids.length) return null;
-  const author = [...scope.querySelectorAll('a[href^="/@"]')].map((a) => a.pathname.match(/^\/@([\w.-]+)\/?$/)).find(Boolean);
-  return { url: `https://www.tiktok.com/@${author ? author[1] : ''}/video/${ids[0][0]}`, title };
+  return { url: `https://www.tiktok.com/@${user}/video/${ids[0][0]}`, title, thumb, user };
+}
+
+function tiktokTitle(text, url, user) {
+  const title = cleanTitle(String(text || '').replace(/\s+/g, ' ').trim().slice(0, 200), url);
+  if (title !== FALLBACK_TITLE.tiktok) return title;
+  return /^[\w.-]+$/.test(user || '') ? `Video de @${user}` : title;
 }
 
 async function resolveTab(tab) {
   if (!tab || !tab.url) return null;
-  if (platformOf(tab.url)) return { url: tab.url, title: cleanTitle(tab.title, tab.url) };
+  const platform = platformOf(tab.url);
   let host = '';
   try {
     host = new URL(tab.url).hostname.toLowerCase();
   } catch {}
-  if (!/(^|\.)tiktok\.com$/.test(host)) return null;
+  const onTiktok = /(^|\.)tiktok\.com$/.test(host);
+  if (platform && !onTiktok) return { url: tab.url, title: cleanTitle(tab.title, tab.url) };
+  if (!onTiktok) return null;
+  let found = null;
   try {
-    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: visibleTiktok });
-    if (!result || platformOf(result.url) !== 'tiktok') return null;
-    const url = new URL(result.url);
-    url.search = '';
-    url.hash = '';
-    return { url: url.href, title: cleanTitle(String(result.title || '').replace(/\s+/g, ' ').slice(0, 200), url.href) };
-  } catch {
-    return null;
-  }
+    [{ result: found }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: visibleTiktok });
+  } catch {}
+  const pageUrl = platform === 'tiktok' ? tab.url : found && platformOf(found.url) === 'tiktok' ? found.url : null;
+  if (!pageUrl) return null;
+  const url = new URL(pageUrl);
+  url.search = '';
+  url.hash = '';
+  const user = found?.user || (url.pathname.match(/^\/@([\w.-]+)\//) || [])[1];
+  const thumb = /^https:\/\//.test(found?.thumb || '') && found.thumb.length < 2000 ? found.thumb : '';
+  return { url: url.href, title: tiktokTitle(found?.title || (platform === 'tiktok' ? tab.title : ''), url.href, user), thumb };
 }
 
 function isActive(job) {
@@ -179,7 +200,7 @@ function run(job) {
       setJob(id, { state: 'error', status: '', error: nativeError('El programa local se cerró.') });
     }
   });
-  port.postMessage({ type: 'download', url: job.url, quality: job.quality, folder: job.folder, trim: !!job.trim });
+  port.postMessage({ type: 'download', url: job.url, title: job.title, quality: job.quality, folder: job.folder, trim: !!job.trim });
 }
 
 async function control(id, action) {
