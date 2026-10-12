@@ -471,10 +471,8 @@ function openFromNotification(notificationId) {
 chrome.notifications.onClicked.addListener(openFromNotification);
 chrome.notifications.onButtonClicked?.addListener(openFromNotification);
 
-chrome.runtime.onInstalled.addListener(() => {
-  scheduleUpdates();
-  setupMenus();
-});
+chrome.runtime.onInstalled.addListener(scheduleUpdates);
+setupMenus();
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'resolve') {
@@ -510,7 +508,6 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
 
 chrome.runtime.onStartup.addListener(() => {
   scheduleUpdates();
-  setupMenus();
   mutateJobs((jobs) => {
     for (const j of Object.values(jobs)) {
       if (isActive(j)) {
