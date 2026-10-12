@@ -10,6 +10,11 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['queued', 'downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.10.0': [
+    'Recortar: elige sobre el video desde dónde hasta dónde y baja solo ese tramo.',
+    'Ábrelo con las tijeras del popup, el clic derecho o Ctrl+Shift+5.',
+    'Clic derecho, playlists, cola de 3 y avisos al terminar.',
+  ],
   '1.9.2': [
     'Clic derecho en un video o link: Descargar MP4 o MP3.',
     'Playlists y álbumes de YouTube: baja la lista completa en su carpeta.',
@@ -109,6 +114,8 @@ const scopeSegEl = document.getElementById('scopeSeg');
 const cancelAllEl = document.getElementById('cancelAll');
 let scope = 'video';
 let target = null;
+let currentTab = null;
+const cutEl = document.getElementById('cut');
 let recording = null;
 let hostNotice = '';
 
@@ -251,6 +258,7 @@ function setTheme(theme) {
   else delete document.documentElement.dataset.theme;
   try {
     localStorage.setItem('mpeasy-theme', theme);
+    chrome.storage.local.set({ theme });
   } catch {}
   paintTheme();
 }
@@ -617,6 +625,12 @@ listEl.addEventListener('click', (e) => {
 clearEl.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'clear' }));
 cancelAllEl.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'cancel-all' }));
 
+cutEl.addEventListener('click', async () => {
+  if (!target || !currentTab) return;
+  await chrome.runtime.sendMessage({ type: 'clip-open', tabId: currentTab.id });
+  window.close();
+});
+
 scopeSegEl.addEventListener('click', (e) => {
   const b = e.target.closest('button');
   if (!b) return;
@@ -647,6 +661,7 @@ chrome.storage.onChanged.addListener((c) => {
 });
 
 chrome.tabs.query({ active: true, currentWindow: true }).then(async ([t]) => {
+  currentTab = t || null;
   target = t ? await chrome.runtime.sendMessage({ type: 'resolve', tabId: t.id }).catch(() => null) : null;
   const platform = target && platformOf(target.url);
   if (platform) {
@@ -672,6 +687,7 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(async ([t]) => {
       : 'Abre un video de YouTube, Facebook, Instagram o TikTok para descargarlo.';
     titleEl.classList.add('off');
     goEl.disabled = true;
+    cutEl.disabled = true;
   }
 });
 
@@ -696,6 +712,7 @@ chrome.storage.local.get(null).then((data) => {
   paintFolders();
   paintTrim();
   paintTheme();
+  if (merged.theme !== currentTheme()) chrome.storage.local.set({ theme: currentTheme() });
   paintDonors();
   hostNotice = merged.notice || '';
   render(merged.jobs || {});

@@ -93,6 +93,7 @@
   }
 
   .group { border-radius: 10px; background: var(--fill); overflow: hidden; }
+  .group.spaced { margin-top: 16px; }
   .row {
     display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px;
     position: relative; width: 100%; border: 0; background: transparent; text-align: left;
@@ -153,6 +154,14 @@
   .go:hover { background: var(--button-press); }
   .go:active { transform: scale(.98); }
   .go:disabled { opacity: .4; cursor: not-allowed; transform: none; background: var(--button); }
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .actions .go { margin-top: 0; }
+  .cut {
+    flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; cursor: pointer;
+    background: var(--fill); color: var(--label); display: grid; place-items: center;
+  }
+  .cut:hover { background: var(--fill-strong); }
+  .cut:disabled { opacity: .4; cursor: not-allowed; }
 
   .notice { margin: 8px 0 0; color: var(--red); font-size: 12px; }
 
@@ -331,10 +340,13 @@
       <ul class="menu" id="qualityMenu" role="listbox" aria-label="Calidad" tabindex="-1" hidden></ul>
     </div>
 
+    <div class="actions">
     <button type="button" class="go" id="go">
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8.5m0 0L4.5 7M8 10.5 11.5 7M3 13.5h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Descargar
     </button>
+    <button type="button" class="cut" id="cut" aria-label="Recortar un tramo" title="Recortar un tramo"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></button>
+    </div>
     <p class="notice" hidden></p>
 
     <div class="head">
@@ -378,7 +390,7 @@
         </div>
       </div>
       <div class="row toggle-row" id="trimRow">
-        <span class="k" id="trimLabel">Quitar silencio del inicio</span>
+        <span class="k" id="trimLabel">Quitar silencio inicial en MP3</span>
         <button type="button" class="switch" id="trimSilence" role="switch" aria-checked="false" aria-labelledby="trimLabel"><span></span></button>
       </div>
       <div class="row toggle-row" id="notifyRow">
@@ -386,7 +398,6 @@
         <button type="button" class="switch" id="notify" role="switch" aria-checked="true" aria-labelledby="notifyLabel"><span></span></button>
       </div>
     </div>
-    <p class="hint">Quitar silencio se aplica solo a MP3.</p>
 
     <h2 class="sec">Atajos de teclado</h2>
     <div class="group">
@@ -398,11 +409,14 @@
         <span class="k">Descargar MP3</span>
         <button type="button" class="kbd" data-command="download-mp3" aria-label="Cambiar atajo para MP3"></button>
       </div>
+      <div class="row">
+        <span class="k">Recortar tramo</span>
+        <button type="button" class="kbd" data-command="clip-video" aria-label="Cambiar atajo para recortar"></button>
+      </div>
     </div>
     <p class="hint" id="keysHint"></p>
 
-    <h2 class="sec">Actualizaciones</h2>
-    <div class="group">
+    <div class="group spaced">
       <div class="row">
         <span class="k" id="version"></span>
         <button type="button" class="rowlink" id="checkUpdate">Buscar ahora</button>

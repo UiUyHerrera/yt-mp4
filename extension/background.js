@@ -8,6 +8,7 @@ const ACTIVE = ['queued', 'downloading', 'paused', 'cancelling'];
 const RUNNING = ['downloading', 'paused', 'cancelling'];
 const MAX_PARALLEL = 3;
 const MAX_LIST = 200;
+const MAX_CLIP_END = 24 * 3600;
 const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBrowserInfo === 'function';
 
 const ports = new Map();
@@ -228,7 +229,7 @@ function start(id, job) {
   port.onDisconnect.addListener(() => {
     if (!finished) end({ state: 'error', status: '', error: nativeError('El programa local se cerró.') });
   });
-  port.postMessage({ type: 'download', url: job.url, title: job.hint || '', quality: job.quality, folder: job.folder, subfolder: job.subfolder || '', trim: !!job.trim });
+  port.postMessage({ type: 'download', url: job.url, title: job.hint || '', quality: job.quality, folder: job.folder, subfolder: job.subfolder || '', trim: !!job.trim, clip: job.clip || null });
 }
 
 async function finish(id) {
@@ -297,11 +298,38 @@ async function settingsFor(mode) {
   };
 }
 
-async function queue(url, title, mode) {
+function clock(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const rest = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${rest}` : `${m}:${rest}`;
+}
+
+function clipOf(start, end) {
+  const valid = Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end <= MAX_CLIP_END && end - start >= 1;
+  return valid ? { start: Math.round(start * 10) / 10, end: Math.round(end * 10) / 10 } : null;
+}
+
+async function queue(url, title, mode, clip = null) {
   if (!platformOf(url)) return;
-  if (playlistOf(url)?.only) return queueList(url, mode);
+  if (!clip && playlistOf(url)?.only) return queueList(url, mode);
   const base = await settingsFor(mode);
-  return enqueue([{ ...base, url, title: title || url, hint: title || '', platform: platformOf(url) }]);
+  const span = clip ? ` (${clock(clip.start)}-${clock(clip.end)})` : '';
+  const shown = title ? `${title}${span}` : url;
+  return enqueue([{ ...base, url, title: shown, hint: title || '', platform: platformOf(url), clip, meta: clip ? `${base.meta} · ${Math.round(clip.end - clip.start)} s` : base.meta }]);
+}
+
+async function openClip(tab) {
+  const target = await resolveTab(tab);
+  if (!target) return flash('!', '#d70015');
+  const { mode, theme } = await chrome.storage.local.get(['mode', 'theme']);
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['clip.js'] });
+    await chrome.tabs.sendMessage(tab.id, { type: 'clip-open', url: target.url, title: target.title, mode: mode === 'audio' ? 'audio' : 'video', theme: theme === 'light' ? 'light' : 'dark' });
+  } catch {
+    flash('!', '#d70015');
+  }
 }
 
 async function queueList(url, mode) {
@@ -335,8 +363,8 @@ async function retry(id) {
   });
   if (!job) return;
   if (job.kind === 'list') return queueList(job.url, job.mode);
-  const { url, title, hint, mode, platform, quality, meta, folder, subfolder, trim, batch } = job;
-  return enqueue([{ url, title, hint: hint ?? title, mode, platform, quality, meta, folder, subfolder, trim, batch }]);
+  const { url, title, hint, mode, platform, quality, meta, folder, subfolder, trim, batch, clip } = job;
+  return enqueue([{ url, title, hint: hint ?? title, mode, platform, quality, meta, folder, subfolder, trim, batch, clip }]);
 }
 
 function ask(message, onReply, onFail = () => notice(nativeError(OLD_HOST))) {
@@ -435,6 +463,7 @@ const MENUS = [
   ['page-audio', 'Descargar MP3', 'page'],
   ['page-list-video', 'Descargar lista completa en MP4', 'page'],
   ['page-list-audio', 'Descargar lista completa en MP3', 'page'],
+  ['page-clip', 'Recortar un tramo y descargar', 'page'],
 ];
 
 function setupMenus() {
@@ -450,6 +479,7 @@ function setupMenus() {
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const id = String(info.menuItemId);
+  if (id === 'page-clip') return openClip(tab);
   const mode = id.endsWith('-audio') ? 'audio' : 'video';
   const url = id.startsWith('link-') ? info.linkUrl : info.pageUrl || tab?.url;
   if (id.includes('-list-')) {
@@ -487,6 +517,11 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'update') checkUpdate(!msg.auto);
   if (msg.type === 'download') queue(msg.url, msg.title, msg.mode);
   if (msg.type === 'download-list') queueList(msg.url, msg.mode);
+  if (msg.type === 'clip-open') chrome.tabs.get(msg.tabId).then(openClip, () => {});
+  if (msg.type === 'clip-download' && sender.tab) {
+    const clip = clipOf(Number(msg.start), Number(msg.end));
+    if (clip && platformOf(msg.url)) queue(msg.url, String(msg.title || '').slice(0, 200), msg.mode === 'audio' ? 'audio' : 'video', clip);
+  }
   if (msg.type === 'cancel-all') cancelAll();
   if (msg.type === 'retry') retry(msg.id);
   if (msg.type === 'reveal') reveal(msg.id);
@@ -500,9 +535,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 });
 
 chrome.commands.onCommand.addListener(async (command, tab) => {
+  if (!tab || !tab.url) [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (command === 'clip-video') return openClip(tab);
   const mode = command === 'download-mp3' ? 'audio' : command === 'download-mp4' ? 'video' : null;
   if (!mode) return;
-  if (!tab || !tab.url) [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const target = await resolveTab(tab);
   if (!target) {
     flash('!', '#d70015');
