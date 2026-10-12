@@ -10,6 +10,12 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.8.0': [
+    'Descarga videos de TikTok.',
+    'Cada descarga de TikTok muestra su logo.',
+    'Menú de calidad con estilo propio.',
+    'Botón Donar con los datos y los últimos donadores.',
+  ],
   '1.7.3': [
     'Menú de calidad con estilo propio.',
     'Botón Donar con los datos y los últimos donadores.',
@@ -86,6 +92,8 @@ function platformOf(u) {
       return /^\/(reel|reels)\/[^/]+|\/videos\/[^/]+|^\/share\/[rv]\/[^/]+/.test(path) ? 'facebook' : null;
     }
     if (/(^|\.)instagram\.com$/.test(host)) return /^\/(reels?|p|tv)\/[^/]+/.test(path) ? 'instagram' : null;
+    if (host === 'vm.tiktok.com' || host === 'vt.tiktok.com') return path.length > 1 ? 'tiktok' : null;
+    if (/(^|\.)tiktok\.com$/.test(host)) return /^\/@[^/]+\/video\/\d+|^\/v\/\d+|^\/t\/[^/]+/.test(path) ? 'tiktok' : null;
   } catch {}
   return null;
 }
@@ -100,8 +108,8 @@ function youtubeId(u) {
   return null;
 }
 
-const FALLBACK_TITLE = { facebook: 'Reel de Facebook', instagram: 'Reel de Instagram' };
-const PLATFORM_NAME = { youtube: 'YouTube', facebook: 'Facebook', instagram: 'Instagram' };
+const FALLBACK_TITLE = { facebook: 'Reel de Facebook', instagram: 'Reel de Instagram', tiktok: 'Video de TikTok' };
+const PLATFORM_NAME = { youtube: 'YouTube', facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok' };
 
 function cleanTitle(t, u) {
   const title = (t || '')
@@ -109,9 +117,10 @@ function cleanTitle(t, u) {
     .replace(/ - YouTube$/, '')
     .replace(/\s*\|\s*Facebook$/, '')
     .replace(/\s*•\s*Instagram.*$/, '')
+    .replace(/\s*\|\s*TikTok$/, '')
     .trim();
   const platform = platformOf(u);
-  if (!title || /^(Facebook|Instagram|Reels?|Watch)$/i.test(title)) return FALLBACK_TITLE[platform] || title;
+  if (!title || /^(Facebook|Instagram|TikTok|Reels?|Watch)$/i.test(title)) return FALLBACK_TITLE[platform] || title;
   return title;
 }
 
@@ -609,7 +618,7 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(([t]) => {
       img.src = src;
     }
   } else {
-    titleEl.textContent = 'Abre un video de YouTube, Facebook o Instagram para descargarlo.';
+    titleEl.textContent = 'Abre un video de YouTube, Facebook, Instagram o TikTok para descargarlo.';
     titleEl.classList.add('off');
     goEl.disabled = true;
   }

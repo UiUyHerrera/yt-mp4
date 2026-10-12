@@ -11,6 +11,7 @@ import threading
 import time
 import urllib.request
 import zipfile
+from urllib.parse import urlparse
 
 out = sys.stdout.buffer
 sys.stdout = sys.stderr
@@ -119,7 +120,7 @@ def refresh_ytdlp():
             return
     except OSError:
         pass
-    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "--quiet", "yt-dlp[default]"]
+    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "--quiet", "yt-dlp[default,curl-cffi]"]
     if subprocess.run(cmd, capture_output=True, timeout=300).returncode == 0:
         with open(stamp, "w") as f:
             f.write(str(int(time.time())))
@@ -252,10 +253,18 @@ def short_title(title, target):
     return cut.rstrip(" -|·,.;:") or cut
 
 
+def site_name(url):
+    host = (urlparse(url).hostname or "").lower()
+    for domain, name in (("instagram.com", "Instagram"), ("facebook.com", "Facebook"), ("fb.watch", "Facebook"), ("tiktok.com", "TikTok")):
+        if host == domain or host.endswith("." + domain):
+            return name
+    return None
+
+
 def friendly_error(text, url):
+    site = site_name(url)
     if "403" in text:
-        return "YouTube bloqueó la descarga (403). Actualiza yt-dlp o intenta de nuevo en un rato."
-    site = "Instagram" if "instagram.com" in url else "Facebook" if ("facebook.com" in url or "fb.watch" in url) else None
+        return f"{site or 'YouTube'} bloqueó la descarga (403). Actualiza yt-dlp o intenta de nuevo en un rato."
     if site and LOGIN_WALL.search(text):
         return f"{site} no dejó bajar este video: puede ser privado o pide iniciar sesión. Si es público, prueba de nuevo en un rato."
     if site and "no video" in text.lower():
