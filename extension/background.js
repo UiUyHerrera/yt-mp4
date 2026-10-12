@@ -384,7 +384,7 @@ async function checkUpdate(manual) {
   if (checking) return;
   const { jobs = {}, update } = await chrome.storage.local.get(['jobs', 'update']);
   if (!manual && update && update.state !== 'checking' && update.state !== 'downloading' && Date.now() - update.at < AUTO_CHECK_MS) return;
-  if (Object.values(jobs).some(isActive)) {
+  if (Object.entries(jobs).some(([id, j]) => j.state === 'queued' || (RUNNING.includes(j.state) && ports.has(id)))) {
     if (manual) setUpdate({ state: 'busy' });
     return;
   }
@@ -473,6 +473,11 @@ chrome.notifications.onButtonClicked?.addListener(openFromNotification);
 
 chrome.runtime.onInstalled.addListener(scheduleUpdates);
 setupMenus();
+mutateJobs((jobs) => {
+  for (const [id, j] of Object.entries(jobs)) {
+    if (RUNNING.includes(j.state) && !ports.has(id)) jobs[id] = { ...j, state: 'error', status: '', error: 'Interrumpida' };
+  }
+}).then(pump);
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'resolve') {
