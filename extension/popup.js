@@ -10,6 +10,11 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['queued', 'downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.10.3': [
+    'Las actualizaciones encuentran la carpeta que usa tu navegador y se instalan ahí.',
+    'Recortar: si YouTube bloquea el corte directo, baja el video y lo corta en tu PC.',
+    'Puedes recortar varias partes del mismo video seguidas.',
+  ],
   '1.10.2': [
     'Recortar: si YouTube bloquea el corte directo, baja el video y lo corta en tu PC.',
     'Puedes recortar varias partes del mismo video seguidas.',

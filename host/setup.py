@@ -6,7 +6,6 @@ import sys
 
 import tools
 
-EXTENSION_ID = "bcgedkiaohjneocngfolnbicpfeaiamm"
 GECKO_ID = "ytmp4@local"
 HOST_NAME = "com.ytmp4.host"
 QUIET = "--update" in sys.argv
@@ -70,7 +69,7 @@ def write_files():
     base = {"name": HOST_NAME, "description": "YT MP4 host", "path": bat, "type": "stdio"}
     chromium = os.path.join(tools.HOST, f"{HOST_NAME}.json")
     firefox = os.path.join(tools.HOST, f"{HOST_NAME}.firefox.json")
-    write_json(chromium, {**base, "allowed_origins": [f"chrome-extension://{EXTENSION_ID}/"]})
+    write_json(chromium, {**base, "allowed_origins": [f"chrome-extension://{tools.EXTENSION_ID}/"]})
     write_json(firefox, {**base, "allowed_extensions": [GECKO_ID]})
 
 
