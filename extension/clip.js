@@ -150,7 +150,7 @@
 
     let start = Math.min(Math.max(0, video.currentTime), duration - MIN_LENGTH);
     let end = Math.min(duration, start + Math.max(MIN_LENGTH, Math.min(15, duration - start)));
-    let format = mode === 'audio' ? 'audio' : 'video';
+    let format = ['audio', 'tracks'].includes(mode) ? mode : 'video';
 
     const track = node('div', { class: 'track' });
     const rail = node('div', { class: 'rail' });
@@ -166,7 +166,8 @@
     const seg = node('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Formato' });
     const mp4 = node('button', { type: 'button', role: 'radio', 'data-format': 'video' }, 'MP4');
     const mp3 = node('button', { type: 'button', role: 'radio', 'data-format': 'audio' }, 'MP3');
-    seg.append(mp4, mp3);
+    const tracks = node('button', { type: 'button', role: 'radio', 'data-format': 'tracks', title: 'Video sin sonido y audio por separado' }, 'Pistas');
+    seg.append(mp4, mp3, tracks);
     const go = node('button', { type: 'button', class: 'go' }, 'Descargar');
     actions.append(markStart, markEnd, seg, go);
     panel.append(track, actions, status);
@@ -187,6 +188,7 @@
       }
       mp4.setAttribute('aria-checked', String(format === 'video'));
       mp3.setAttribute('aria-checked', String(format === 'audio'));
+      tracks.setAttribute('aria-checked', String(format === 'tracks'));
     };
     const tickPlayhead = () => {
       playhead.style.left = pct(Math.min(video.currentTime, duration));

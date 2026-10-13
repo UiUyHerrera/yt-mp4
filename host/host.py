@@ -589,28 +589,50 @@ def parse_clip(clip):
     return start, end
 
 
-def cut_file(path, clip, mp3):
+TRACK_SUFFIXES = (" (video).mp4", " (audio).m4a")
+
+
+def run_ffmpeg(args):
     ff = tools.ffmpeg_dir()
     exe = os.path.join(ff, "ffmpeg.exe") if ff else "ffmpeg"
+    try:
+        done = subprocess.run([exe, "-y", "-loglevel", "error", *args], capture_output=True, timeout=1800, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return done.returncode == 0
+
+
+def remove_files(*paths):
+    for path in paths:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def cut_file(path, clip, mp3):
     root, ext = os.path.splitext(path)
     temp = f"{root}.cut{ext}"
     codecs = ["-map", "0", "-c", "copy"] if mp3 else [
         "-map", "0:v:0?", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
     ]
-    cmd = [exe, "-y", "-loglevel", "error", "-ss", str(clip[0]), "-to", str(clip[1]), "-i", path, "-map_metadata", "0", *codecs, temp]
-    try:
-        done = subprocess.run(cmd, capture_output=True, timeout=1800, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    except (OSError, subprocess.TimeoutExpired):
-        done = None
-    if not done or done.returncode != 0 or not os.path.isfile(temp):
-        for leftover in (temp, path):
-            try:
-                os.remove(leftover)
-            except OSError:
-                pass
+    if not run_ffmpeg(["-ss", str(clip[0]), "-to", str(clip[1]), "-i", path, "-map_metadata", "0", *codecs, temp]) or not os.path.isfile(temp):
+        remove_files(temp, path)
         raise RuntimeError("No se pudo recortar el video.")
     os.replace(temp, path)
+
+
+def split_tracks(path):
+    root = os.path.splitext(path)[0]
+    video, audio = (root + suffix for suffix in TRACK_SUFFIXES)
+    if not run_ffmpeg(["-i", path, "-map", "0:v:0", "-c", "copy", "-movflags", "+faststart", video]):
+        remove_files(video, path)
+        raise RuntimeError("No se pudieron separar las pistas.")
+    if not run_ffmpeg(["-i", path, "-map", "0:a:0", "-c", "copy", audio]):
+        remove_files(audio)
+    remove_files(path)
+    return video
 
 
 def download(url, quality, folder, control, trim=False, hint="", subfolder="", clip=None):
@@ -632,7 +654,9 @@ def download_once(url, quality, folder, control, trim, hint, subfolder, clip, lo
     yt_dlp = load_ytdlp()
     state = {"last": -1.0}
     mp3 = quality.startswith("mp3")
-    kbps = quality.split("-")[1] if "-" in quality else "320"
+    tracks = quality.startswith("tracks")
+    kbps = quality.split("-")[1] if mp3 and "-" in quality else "320"
+    video_quality = quality.split("-", 1)[1] if tracks else quality
     target = target_folder(folder, subfolder)
     ensure_tools(control)
     started = time.time() - 2
@@ -655,7 +679,7 @@ def download_once(url, quality, folder, control, trim, hint, subfolder, clip, lo
         control.checkpoint()
 
     opts = {
-        **format_options(quality, mp3),
+        **format_options(video_quality, mp3),
         "merge_output_format": "mp4",
         "outtmpl": os.path.join(target, "%(title)s.%(ext)s"),
         "noplaylist": True,
@@ -709,10 +733,10 @@ def download_once(url, quality, folder, control, trim, hint, subfolder, clip, lo
                     info["title"] = short_title(nice_title(info, url, hint), target, len(span)) + span
                     send({"type": "info", "title": info["title"]})
                     if reserved is None:
-                        reserved = reserve_name(ydl, info, target, ".mp3" if mp3 else ".mp4")
+                        reserved = reserve_name(ydl, info, target, ".mp3" if mp3 else TRACK_SUFFIXES[0] if tracks else ".mp4")
                     tmpl, base, _ = reserved
                     ydl.params["outtmpl"]["default"] = tmpl
-                    created.update(base + ext for ext in (".webp", ".jpg", ".png", ".mp3", ".mp4", ".m4a", ".webm", ".temp.mp4"))
+                    created.update(base + ext for ext in (".webp", ".jpg", ".png", ".mp3", ".mp4", ".m4a", ".webm", ".temp.mp4", *TRACK_SUFFIXES))
                     ydl.process_ie_result(info, download=True)
                     path = info.get("requested_downloads", [{}])[0].get("filepath") or ydl.prepare_filename(info)
                     if mp3:
@@ -720,6 +744,9 @@ def download_once(url, quality, folder, control, trim, hint, subfolder, clip, lo
                     if clip and local_cut:
                         send({"type": "status", "text": "Recortando"})
                         cut_file(path, clip, mp3)
+                    if tracks:
+                        send({"type": "status", "text": "Separando pistas"})
+                        path = split_tracks(path)
                     send({"type": "done", "file": os.path.basename(path), "path": path})
                     return
             except Cancelled:
