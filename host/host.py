@@ -198,7 +198,10 @@ def update(current):
         with http_get(asset["browser_download_url"]) as r, open(z, "wb") as f:
             shutil.copyfileobj(r, f)
         apply_release(z)
-    subprocess.run([sys.executable, os.path.join(tools.HOST, "setup.py"), "--update"], capture_output=True, timeout=900)
+    try:
+        subprocess.run([sys.executable, os.path.join(tools.HOST, "setup.py"), "--files"], capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
     send({"type": "updated", "version": latest})
 
 
