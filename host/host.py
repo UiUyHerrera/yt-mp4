@@ -271,9 +271,16 @@ def site_name(url):
     return None
 
 
+FORBIDDEN = re.compile(r"\b403\b|3436169992|-858797304")
+
+
+def forbidden(text):
+    return bool(FORBIDDEN.search(text))
+
+
 def friendly_error(text, url):
     site = site_name(url)
-    if "403" in text:
+    if forbidden(text):
         return f"{site or 'YouTube'} bloqueó la descarga (403). Actualiza yt-dlp o intenta de nuevo en un rato."
     if site and LOGIN_WALL.search(text):
         return f"{site} no dejó bajar este video: puede ser privado o pide iniciar sesión. Si es público, prueba de nuevo en un rato."
@@ -535,14 +542,46 @@ def parse_clip(clip):
     return start, end
 
 
-def download(url, quality, folder, control, trim=False, hint="", subfolder="", clip=None):
+def cut_file(path, clip, mp3):
+    ff = tools.ffmpeg_dir()
+    exe = os.path.join(ff, "ffmpeg.exe") if ff else "ffmpeg"
+    root, ext = os.path.splitext(path)
+    temp = f"{root}.cut{ext}"
+    codecs = ["-map", "0", "-c", "copy"] if mp3 else [
+        "-map", "0:v:0?", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+    ]
+    cmd = [exe, "-y", "-loglevel", "error", "-ss", str(clip[0]), "-to", str(clip[1]), "-i", path, "-map_metadata", "0", *codecs, temp]
     try:
-        download_once(url, quality, folder, control, trim, hint, subfolder, clip)
-    except TrimFailed:
-        download_once(url, quality, folder, control, False, hint, subfolder, clip)
+        done = subprocess.run(cmd, capture_output=True, timeout=1800, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.TimeoutExpired):
+        done = None
+    if not done or done.returncode != 0 or not os.path.isfile(temp):
+        for leftover in (temp, path):
+            try:
+                os.remove(leftover)
+            except OSError:
+                pass
+        raise RuntimeError("No se pudo recortar el video.")
+    os.replace(temp, path)
 
 
-def download_once(url, quality, folder, control, trim, hint, subfolder, clip):
+def download(url, quality, folder, control, trim=False, hint="", subfolder="", clip=None):
+    local_cut = False
+    while True:
+        try:
+            return download_once(url, quality, folder, control, trim, hint, subfolder, clip, local_cut)
+        except TrimFailed:
+            trim = False
+        except Exception as e:
+            if not clip or local_cut or not (forbidden(str(e)) or "ffmpeg exited with code" in str(e)):
+                raise
+            local_cut = True
+            send({"type": "status", "text": "Bajando para recortar"})
+            send({"type": "progress", "percent": 0})
+
+
+def download_once(url, quality, folder, control, trim, hint, subfolder, clip, local_cut):
     yt_dlp = load_ytdlp()
     state = {"last": -1.0}
     mp3 = quality.startswith("mp3")
@@ -596,9 +635,10 @@ def download_once(url, quality, folder, control, trim, hint, subfolder, clip):
         if trim:
             opts["postprocessor_args"] = {"extractaudio": ["-af", SILENCE_FILTER]}
     span = ""
-    if clip:
+    if clip and not local_cut:
         opts["download_ranges"] = yt_dlp.utils.download_range_func(None, [clip])
         opts["force_keyframes_at_cuts"] = True
+    if clip:
         span = f" ({clock(clip[0])}-{clock(clip[1])})".replace(":", ".")
     ff = tools.ffmpeg_dir()
     if ff:
@@ -630,6 +670,9 @@ def download_once(url, quality, folder, control, trim, hint, subfolder, clip):
                     path = info.get("requested_downloads", [{}])[0].get("filepath") or ydl.prepare_filename(info)
                     if mp3:
                         path = os.path.splitext(path)[0] + ".mp3"
+                    if clip and local_cut:
+                        send({"type": "status", "text": "Recortando"})
+                        cut_file(path, clip, mp3)
                     send({"type": "done", "file": os.path.basename(path), "path": path})
                     return
             except Cancelled:
@@ -640,10 +683,13 @@ def download_once(url, quality, folder, control, trim, hint, subfolder, clip):
                 if trim and "Postprocessing" in str(e):
                     remove_created(created, started)
                     raise TrimFailed()
-                if "403" not in str(e):
+                if not forbidden(str(e)):
                     raise
                 send({"type": "progress", "percent": 0})
         raise last
+    except Exception:
+        remove_created(created, started)
+        raise
     finally:
         if reserved:
             try:
