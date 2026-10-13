@@ -10,6 +10,11 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['queued', 'downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.10.1': [
+    'Recortar: elige sobre el video desde dónde hasta dónde y baja solo ese tramo.',
+    'Ábrelo con las tijeras del popup, el clic derecho o Ctrl+Shift+5.',
+    'Las actualizaciones se instalan al instante, sin quedar trabadas.',
+  ],
   '1.10.0': [
     'Recortar: elige sobre el video desde dónde hasta dónde y baja solo ese tramo.',
     'Ábrelo con las tijeras del popup, el clic derecho o Ctrl+Shift+5.',

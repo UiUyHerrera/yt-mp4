@@ -406,27 +406,32 @@ function setUpdate(data) {
   return chrome.storage.local.set({ update: { ...data, at: Date.now() } });
 }
 
-let checking = false;
+const CHECK_TIMEOUT_MS = 10 * 60 * 1000;
+let checking = null;
 
 async function checkUpdate(manual) {
-  if (checking) return;
+  if (checking && Date.now() - checking.since < CHECK_TIMEOUT_MS) return;
+  if (checking) {
+    checking.port.disconnect();
+    checking = null;
+  }
   const { jobs = {}, update } = await chrome.storage.local.get(['jobs', 'update']);
   if (!manual && update && update.state !== 'checking' && update.state !== 'downloading' && Date.now() - update.at < AUTO_CHECK_MS) return;
   if (Object.entries(jobs).some(([id, j]) => j.state === 'queued' || (RUNNING.includes(j.state) && ports.has(id)))) {
     if (manual) setUpdate({ state: 'busy' });
     return;
   }
-  checking = true;
   await setUpdate({ state: 'checking' });
   let answered = false;
   const port = chrome.runtime.connectNative(HOST);
+  checking = { port, since: Date.now() };
   port.onMessage.addListener(async (msg) => {
     if (msg.type === 'update-found') {
       setUpdate({ state: 'downloading', version: msg.version });
       return;
     }
     answered = true;
-    checking = false;
+    checking = null;
     port.disconnect();
     if (msg.type === 'updated') {
       await setUpdate({ state: 'updated', version: msg.version });
@@ -438,7 +443,7 @@ async function checkUpdate(manual) {
     }
   });
   port.onDisconnect.addListener(() => {
-    checking = false;
+    if (checking?.port === port) checking = null;
     if (!answered) setUpdate({ state: 'error', error: nativeError(OLD_HOST) });
   });
   port.postMessage({ type: 'update', version: chrome.runtime.getManifest().version });
