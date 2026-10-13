@@ -10,6 +10,11 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['queued', 'downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.10.2': [
+    'Recortar: si YouTube bloquea el corte directo, baja el video y lo corta en tu PC.',
+    'Puedes recortar varias partes del mismo video seguidas.',
+    'Las actualizaciones se instalan al instante, sin quedar trabadas.',
+  ],
   '1.10.1': [
     'Recortar: elige sobre el video desde dónde hasta dónde y baja solo ese tramo.',
     'Ábrelo con las tijeras del popup, el clic derecho o Ctrl+Shift+5.',
