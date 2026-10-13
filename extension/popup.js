@@ -2,14 +2,20 @@ const QUALITY = {
   video: [['best', 'Máxima disponible'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['360', '360p']],
   audio: [['320', '320 kbps'], ['256', '256 kbps'], ['192', '192 kbps'], ['128', '128 kbps'], ['96', '96 kbps']],
 };
-const DEFAULT = { video: '720', audio: '320' };
-const QKEY = { video: 'qualityVideo', audio: 'qualityAudio' };
+QUALITY.tracks = QUALITY.video;
+const DEFAULT = { video: '720', audio: '320', tracks: '720' };
+const QKEY = { video: 'qualityVideo', audio: 'qualityAudio', tracks: 'qualityVideo' };
 const PICK_TITLE = { folderMp4: 'Carpeta para MP4', folderMp3: 'Carpeta para MP3' };
 const CIRC = 2 * Math.PI * 8;
 const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBrowserInfo === 'function';
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['queued', 'downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.11.0': [
+    'Pistas: baja el video sin sonido y el audio por separado, listos para editar.',
+    'Elige «Pistas» en el popup, en el clic derecho o en la barra de recorte.',
+    'Las actualizaciones encuentran la carpeta que usa tu navegador y se instalan ahí.',
+  ],
   '1.10.3': [
     'Las actualizaciones encuentran la carpeta que usa tu navegador y se instalan ahí.',
     'Recortar: si YouTube bloquea el corte directo, baja el video y lo corta en tu PC.',

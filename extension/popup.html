@@ -85,6 +85,9 @@
     transition: transform .25s cubic-bezier(.3,.7,.4,1);
   }
   .seg[data-mode="audio"]::before, .seg[data-mode="light"]::before, .seg[data-mode="list"]::before { transform: translateX(100%); }
+  .seg.three { grid-template-columns: repeat(3, 1fr); }
+  .seg.three::before { width: calc((100% - 4px) / 3); }
+  .seg.three[data-mode="tracks"]::before { transform: translateX(200%); }
   .seg.mini { flex: none; width: 148px; margin: 0 0 0 auto; }
   .seg.mini button { min-height: 30px; font-size: 12px; }
   .seg button {
@@ -324,9 +327,10 @@
       <button type="button" role="radio" aria-checked="false" data-scope="list">Lista completa</button>
     </div>
 
-    <div class="seg" id="seg" data-mode="video" role="tablist" aria-label="Formato">
+    <div class="seg three" id="seg" data-mode="video" role="tablist" aria-label="Formato">
       <button type="button" role="tab" aria-selected="true" data-mode="video">Video</button>
       <button type="button" role="tab" aria-selected="false" data-mode="audio">Audio</button>
+      <button type="button" role="tab" aria-selected="false" data-mode="tracks" title="Video sin sonido y audio en archivos separados">Pistas</button>
     </div>
 
     <div class="qwrap">

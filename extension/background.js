@@ -284,15 +284,23 @@ async function cancelAll() {
   for (const id of ids.filter((i) => jobs[i].state !== 'queued' && jobs[i].state !== 'cancelling')) await control(id, 'cancel');
 }
 
-async function settingsFor(mode) {
+const MODES = ['video', 'audio', 'tracks'];
+
+function modeOf(value) {
+  return MODES.includes(value) ? value : 'video';
+}
+
+async function settingsFor(requested) {
+  const mode = modeOf(requested);
   const s = await chrome.storage.local.get(['qualityVideo', 'qualityAudio', 'folderMp4', 'folderMp3', 'folder', 'trimSilence']);
   const audio = mode === 'audio';
   const kbps = s.qualityAudio || '320';
   const height = s.qualityVideo || '720';
+  const resolution = height === 'best' ? 'Máxima' : `${height}p`;
   return {
     mode,
-    quality: audio ? `mp3-${kbps}` : height,
-    meta: audio ? `MP3 · ${kbps}` : height === 'best' ? 'Máxima' : `${height}p`,
+    quality: audio ? `mp3-${kbps}` : mode === 'tracks' ? `tracks-${height}` : height,
+    meta: audio ? `MP3 · ${kbps}` : mode === 'tracks' ? `Pistas · ${resolution}` : resolution,
     folder: (audio ? s.folderMp3 : s.folderMp4) ?? s.folder ?? '',
     trim: audio && !!s.trimSilence,
   };
@@ -326,14 +334,15 @@ async function openClip(tab) {
   const { mode, theme } = await chrome.storage.local.get(['mode', 'theme']);
   try {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['clip.js'] });
-    await chrome.tabs.sendMessage(tab.id, { type: 'clip-open', url: target.url, title: target.title, mode: mode === 'audio' ? 'audio' : 'video', theme: theme === 'light' ? 'light' : 'dark' });
+    await chrome.tabs.sendMessage(tab.id, { type: 'clip-open', url: target.url, title: target.title, mode: modeOf(mode), theme: theme === 'light' ? 'light' : 'dark' });
   } catch {
     flash('!', '#d70015');
   }
 }
 
-async function queueList(url, mode) {
+async function queueList(url, requested) {
   if (!playlistOf(url)) return;
+  const mode = requested === 'audio' ? 'audio' : 'video';
   const base = await settingsFor(mode);
   const id = newId();
   await setJob(id, { kind: 'list', url, title: 'Lista de YouTube', mode, platform: 'youtube', meta: base.meta, state: 'downloading', percent: 0, status: 'Leyendo la lista' });
@@ -462,10 +471,12 @@ const LIST_PATTERNS = ['*://*.youtube.com/*list=*'];
 const MENUS = [
   ['link-video', 'Descargar MP4', 'link'],
   ['link-audio', 'Descargar MP3', 'link'],
+  ['link-tracks', 'Descargar pistas separadas', 'link'],
   ['link-list-video', 'Descargar lista completa en MP4', 'link'],
   ['link-list-audio', 'Descargar lista completa en MP3', 'link'],
   ['page-video', 'Descargar MP4', 'page'],
   ['page-audio', 'Descargar MP3', 'page'],
+  ['page-tracks', 'Descargar pistas separadas', 'page'],
   ['page-list-video', 'Descargar lista completa en MP4', 'page'],
   ['page-list-audio', 'Descargar lista completa en MP3', 'page'],
   ['page-clip', 'Recortar un tramo y descargar', 'page'],
@@ -485,7 +496,7 @@ function setupMenus() {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const id = String(info.menuItemId);
   if (id === 'page-clip') return openClip(tab);
-  const mode = id.endsWith('-audio') ? 'audio' : 'video';
+  const mode = modeOf(id.split('-').pop());
   const url = id.startsWith('link-') ? info.linkUrl : info.pageUrl || tab?.url;
   if (id.includes('-list-')) {
     if (playlistOf(url)) return queueList(url, mode);
@@ -525,7 +536,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg.type === 'clip-open') chrome.tabs.get(msg.tabId).then(openClip, () => {});
   if (msg.type === 'clip-download' && sender.tab) {
     const clip = clipOf(Number(msg.start), Number(msg.end));
-    if (clip && platformOf(msg.url)) queue(msg.url, String(msg.title || '').slice(0, 200), msg.mode === 'audio' ? 'audio' : 'video', clip);
+    if (clip && platformOf(msg.url)) queue(msg.url, String(msg.title || '').slice(0, 200), modeOf(msg.mode), clip);
   }
   if (msg.type === 'cancel-all') cancelAll();
   if (msg.type === 'retry') retry(msg.id);
