@@ -6,6 +6,7 @@ import zipfile
 
 HOST = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HOST)
+EXTENSION_ID = "bcgedkiaohjneocngfolnbicpfeaiamm"
 TOOLS = os.path.join(ROOT, "tools")
 LINKS = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "WinGet", "Links")
 FFMPEG_URLS = [

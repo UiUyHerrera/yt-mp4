@@ -1,3 +1,4 @@
+import glob
 import hashlib
 import json
 import os
@@ -154,25 +155,66 @@ def release_members(z):
     return members
 
 
-def apply_release(zip_path):
+def apply_release(zip_path, root, extension_only=False):
     with zipfile.ZipFile(zip_path) as z:
         members = release_members(z)
-        with tempfile.TemporaryDirectory(dir=tools.ROOT) as stage:
+        if extension_only:
+            members = {rel: info for rel, info in members.items() if rel.startswith("extension/")}
+        with tempfile.TemporaryDirectory(dir=root) as stage:
             for rel, info in members.items():
                 dest = os.path.join(stage, *rel.split("/"))
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
                 with z.open(info) as src, open(dest, "wb") as dst:
                     shutil.copyfileobj(src, dst)
             for rel in members:
-                final = os.path.join(tools.ROOT, *rel.split("/"))
+                final = os.path.join(root, *rel.split("/"))
                 os.makedirs(os.path.dirname(final), exist_ok=True)
                 os.replace(os.path.join(stage, *rel.split("/")), final)
-    ext = os.path.join(tools.ROOT, "extension")
+    ext = os.path.join(root, "extension")
     for base, _, files in os.walk(ext):
         for name in files:
-            rel = os.path.relpath(os.path.join(base, name), tools.ROOT).replace(os.sep, "/")
+            rel = os.path.relpath(os.path.join(base, name), root).replace(os.sep, "/")
             if rel not in members:
                 os.remove(os.path.join(base, name))
+
+
+BROWSER_DATA = (("Google", "Chrome"), ("Google", "Chrome Beta"), ("Microsoft", "Edge"), ("BraveSoftware", "Brave-Browser"))
+
+
+def manifest_of(folder):
+    try:
+        with open(os.path.join(folder, "manifest.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def loaded_extension_folders():
+    base = os.environ.get("LOCALAPPDATA", "")
+    found = set()
+    for vendor, browser in BROWSER_DATA:
+        data = os.path.join(base, vendor, browser, "User Data")
+        for prefs in glob.glob(os.path.join(data, "*", "Preferences")) + glob.glob(os.path.join(data, "*", "Secure Preferences")):
+            try:
+                with open(prefs, encoding="utf-8") as f:
+                    settings = json.load(f).get("extensions", {}).get("settings", {})
+                path = settings.get(tools.EXTENSION_ID, {}).get("path")
+            except (OSError, ValueError, AttributeError):
+                continue
+            if isinstance(path, str) and os.path.isabs(path):
+                found.add(os.path.normpath(path))
+    return found
+
+
+def other_extension_folders():
+    own = os.path.normcase(os.path.join(tools.ROOT, "extension"))
+    key = manifest_of(os.path.join(tools.ROOT, "extension")).get("key")
+    for folder in loaded_extension_folders():
+        if os.path.normcase(folder) == own or os.path.basename(folder).lower() != "extension":
+            continue
+        manifest = manifest_of(folder)
+        if key and manifest.get("name") == "mpeasy" and manifest.get("key") == key:
+            yield folder
 
 
 def update(current):
@@ -197,7 +239,12 @@ def update(current):
         z = os.path.join(tmp, "yt-mp4.zip")
         with http_get(asset["browser_download_url"]) as r, open(z, "wb") as f:
             shutil.copyfileobj(r, f)
-        apply_release(z)
+        apply_release(z, tools.ROOT)
+        for folder in other_extension_folders():
+            try:
+                apply_release(z, os.path.dirname(folder), extension_only=True)
+            except (OSError, RuntimeError):
+                pass
     try:
         subprocess.run([sys.executable, os.path.join(tools.HOST, "setup.py"), "--files"], capture_output=True, timeout=60)
     except (OSError, subprocess.TimeoutExpired):
