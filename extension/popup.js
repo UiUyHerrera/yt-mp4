@@ -11,6 +11,9 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['queued', 'downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.11.2': [
+    'Recortar vuelve a funcionar cuando ffmpeg no está en el PATH del navegador.',
+  ],
   '1.11.1': [
     'Recortar ya encuentra ffmpeg aunque lo hayas instalado con el navegador abierto.',
   ],

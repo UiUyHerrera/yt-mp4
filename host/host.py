@@ -714,6 +714,9 @@ def download_once(url, quality, folder, control, trim, hint, subfolder, clip, lo
     ff = tools.ffmpeg_dir()
     if ff:
         opts["ffmpeg_location"] = ff
+        # yt-dlp checks ffmpeg for partial downloads through PATH only, ignoring ffmpeg_location.
+        if ff not in os.environ.get("PATH", "").split(os.pathsep):
+            os.environ["PATH"] = ff + os.pathsep + os.environ.get("PATH", "")
 
     reserved = None
     try:
