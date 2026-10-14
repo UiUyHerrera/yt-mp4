@@ -11,6 +11,9 @@ const FIREFOX = typeof browser !== 'undefined' && typeof browser.runtime?.getBro
 const VERSION = chrome.runtime.getManifest().version;
 const ACTIVE = ['queued', 'downloading', 'paused', 'cancelling'];
 const CHANGES = {
+  '1.11.1': [
+    'Recortar ya encuentra ffmpeg aunque lo hayas instalado con el navegador abierto.',
+  ],
   '1.11.0': [
     'Pistas: baja el video sin sonido y el audio por separado, listos para editar.',
     'Elige «Pistas» en el popup, en el clic derecho o en la barra de recorte.',

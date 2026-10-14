@@ -1,3 +1,4 @@
+import glob
 import os
 import shutil
 import tempfile
@@ -25,17 +26,37 @@ def _first(paths):
     return None
 
 
+def _registry_path():
+    # Chrome keeps the PATH it started with, so read the current one from the registry.
+    try:
+        import winreg
+    except ImportError:
+        return ""
+    parts = []
+    for root, key in ((winreg.HKEY_CURRENT_USER, "Environment"),
+                      (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment")):
+        try:
+            with winreg.OpenKey(root, key) as k:
+                parts.append(os.path.expandvars(winreg.QueryValueEx(k, "Path")[0]))
+        except OSError:
+            pass
+    return os.pathsep.join(parts)
+
+
 def ffmpeg_dir():
-    found = shutil.which("ffmpeg")
-    candidates = [
-        os.path.join(os.path.dirname(found), "ffmpeg.exe") if found else None,
+    found = [shutil.which("ffmpeg"), shutil.which("ffmpeg", path=_registry_path())]
+    candidates = [os.path.realpath(f) for f in found if f] + [
         os.path.join(TOOLS, "ffmpeg", "ffmpeg.exe"),
         os.path.join(os.path.expanduser("~"), "ffmpeg", "bin", "ffmpeg.exe"),
         os.path.join(LINKS, "ffmpeg.exe"),
+        *glob.glob(os.path.join(os.path.dirname(LINKS), "Packages", "*FFmpeg*", "*", "bin", "ffmpeg.exe")),
+        os.path.join(os.environ.get("ProgramData", r"C:\ProgramData"), "chocolatey", "bin", "ffmpeg.exe"),
+        os.path.join(os.path.expanduser("~"), "scoop", "apps", "ffmpeg", "current", "bin", "ffmpeg.exe"),
     ]
-    exe = _first(candidates)
-    if exe and os.path.isfile(os.path.join(os.path.dirname(exe), "ffprobe.exe")):
-        return os.path.dirname(exe)
+    for exe in candidates:
+        folder = os.path.dirname(exe)
+        if os.path.isfile(exe) and os.path.isfile(os.path.join(folder, "ffprobe.exe")):
+            return folder
     return None
 
 
