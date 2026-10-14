@@ -3,7 +3,7 @@
 Extensión para navegador que descarga canciones y videos de **YouTube, Facebook, Instagram y TikTok** en MP3 o MP4, directo desde la página que estás viendo.
 
 <p align="center">
-  <img src="docs/popup.png" alt="Ventana de mpeasy con las pestañas Video, Audio y Pistas, el menú de calidad y el botón Descargar" width="300">
+  <img src="docs/popup-v2.png" alt="Ventana de mpeasy con las pestañas Video, Audio y Pistas, el menú de calidad y el botón Descargar" width="300">
 </p>
 
 ## Qué hace
