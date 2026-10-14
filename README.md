@@ -3,7 +3,7 @@
 Extensión para navegador que descarga canciones y videos de **YouTube, Facebook, Instagram y TikTok** en MP3 o MP4, directo desde la página que estás viendo.
 
 <p align="center">
-  <img src="docs/popup.png" alt="Ventana de mpeasy con las pestañas Video, Audio y Pistas, el menú de calidad y el botón Descargar" width="260">
+  <img src="docs/popup.png" alt="Ventana de mpeasy con las pestañas Video, Audio y Pistas, el menú de calidad y el botón Descargar" width="300">
 </p>
 
 ## Qué hace
@@ -48,7 +48,24 @@ Listo. Vas a ver el ícono de **mpeasy** en la barra del navegador.
 3. Elegí **Video**, **Audio** o **Pistas** y la calidad.
 4. Tocá **Descargar**. El avance se ve en la lista de abajo y, al terminar, te avisa.
 
-Para recortar un tramo, tocá las **tijeras** al lado de Descargar y marcá el inicio y el fin.
+### Recortar un tramo
+
+Tocá las **tijeras** al lado de Descargar (o `Ctrl+Shift+5`). Aparece una barra sobre el video:
+marcá **Inicio aquí** y **Fin aquí**, elegí MP4, MP3 o Pistas, y bajás solo ese tramo.
+
+<p align="center">
+  <img src="docs/recortar.webp" alt="Barra de recorte sobre un video: inicio, fin, duración del tramo y botón Descargar" width="560">
+</p>
+
+### Ajustes
+
+Desde el engranaje (arriba a la derecha) elegís las carpetas donde se guardan los MP4 y MP3,
+el tema (oscuro o claro), si querés quitar el silencio del inicio en los MP3 y si te avisa al
+terminar. También están los atajos de teclado y el botón para **buscar actualizaciones**.
+
+<p align="center">
+  <img src="docs/ajustes.png" alt="Pantalla de ajustes: carpetas de MP4 y MP3, tema, preferencias, atajos de teclado y versión" width="300">
+</p>
 
 ## Actualizaciones
 
